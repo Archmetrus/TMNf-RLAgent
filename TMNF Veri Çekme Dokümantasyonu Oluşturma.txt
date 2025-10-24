@@ -1,0 +1,452 @@
+﻿TrackMania Nations Forever'dan Gerçek Zamanlı Veri Çıkarma: TMInterface Ekosistemine Yönelik Kapsamlı Teknik Kılavuz
+
+
+
+
+Bölüm 1: Temel Kurulum ve Yapılandırma
+
+
+TrackMania Nations Forever (TMNF) ile programatik olarak etkileşim kurmayı ve gerçek zamanlı veri çıkarmayı amaçlayan herhangi bir projenin başarısı, temelini oluşturan geliştirme ortamının kararlılığına ve doğruluğuna bağlıdır. Bu bölüm, TMInterface aracını kurmak, yapılandırmak ve oyunla sorunsuz bir şekilde entegre etmek için gerekli adımları ayrıntılı olarak ele almaktadır. Süreç, basit bir kurulum listesinin ötesine geçerek, her adımın arkasındaki teknik gerekçeleri açıklayarak, kullanıcının içinde çalıştığı ekosistemi tam olarak anlamasını sağlamayı hedefler.
+
+
+1.1. Önerilen Yol: TrackMania ModLoader
+
+
+TMInterface'i kurmanın ve yönetmenin en modern ve güvenilir yöntemi, TrackMania ModLoader'ı kullanmaktır.1 TMInterface'in bağımsız (standalone) sürümleri mevcut olsa da, bunlar genellikle daha eskidir ve yeni projeler için önerilmemektedir.1 ModLoader, TMNF modlama ekosistemi için merkezi bir yönetim platformu görevi görür. Sürüm çakışmalarını önler, güncellemeleri basitleştirir ve diğer temel araçlarla uyumluluğu garanti eder.
+Kurulum süreci aşağıdaki adımları içerir:
+1. TrackMania ModLoader yükleyicisinin en son sürümünü resmi dağıtım kaynağından indirin.
+2. Yükleyiciyi çalıştırın ve ekrandaki talimatları izleyerek ModLoader'ı sisteminize kurun.
+3. Kurulum tamamlandıktan sonra ModLoader'ı başlatın. Arayüzde mevcut modların bir listesi görünecektir.
+4. Listeden "TMInterface" modunu bulun ve yanındaki yükle simgesine tıklayarak kurulumu başlatın.
+5. Kurulum tamamlandığında, TMInterface modunu etkinleştirmek için yanındaki onay kutusunu işaretleyin.
+6. Son olarak, ModLoader'ın "Profiller" panelindeki "Oynat" düğmesine tıklayarak oyunu TMInterface etkinleştirilmiş şekilde başlatın.
+
+
+1.2. Platforma Özel Kurulum: Steam ve Bağımsız Sürüm Karşılaştırması
+
+
+TMNF'nin Steam sürümünü kullananlar için kritik ve ek bir adım gereklidir. TMInterface'in düzgün çalışabilmesi için oyunun 2.11.26 sürümüne güncellenmesi zorunludur ve bu, "Steam TMNF Fix" olarak bilinen özel bir yama ile sağlanır.1 Bu yama, Steam sürümünün yürütülebilir dosyasını, TMInterface'in dayandığı API ve bellek adresleriyle uyumlu hale getirerek bağımsız sürümle hizalar.
+Yamayı doğru bir şekilde uygulamak ve doğrulamak için izlenmesi gereken adımlar şunlardır:
+1. Oyun Dizinini Bulma: Steam kütüphanenizde TrackMania Nations Forever üzerine sağ tıklayın, "Özellikler"i seçin, ardından "Yerel Dosyalar" sekmesine gidin ve "Gözat" düğmesine tıklayın. Bu, oyunun kurulu olduğu klasörü açacaktır.
+2. Yamayı Uygulama: İndirilen "Steam TMNF Fix" yamasını bu klasörün içine kopyalayın ve çalıştırın.
+3. Doğrulama: Yamanın başarılı olup olmadığını kontrol etmek için oyunu Steam üzerinden başlatın. Açılan pencerede "TrackMania Nations Forever Ayarları" seçeneğini belirleyin ve "Oynat"a tıklayın. Başlatıcının pencere başlığında "TrackMania Nations Forever 2.11.26" yazmalıdır. Eğer başlıkta 2.11.16 sürümü görünüyorsa, yama doğru uygulanmamış demektir ve TMInterface çalışmayacaktır.1
+
+
+1.3. Güvenlik Notu: Antivirüs Yanlış Pozitiflerini Yönetme
+
+
+TMInterface ve ModLoader'ın, antivirüs yazılımları tarafından sıkça zararlı olarak işaretlenmesi yaygın bir durumdur. Bu programlar, "wacatac" gibi belirli trojan isimleriyle bile etiketlenebilir.3 Bu durum, aracın mimarisinin doğal bir sonucudur ve kötü niyetli bir yazılım olduğunu göstermez.
+Bu yanlış pozitiflerin teknik nedeni, TMInterface'in çalışma prensibidir. Araç, oyunun işlem belleğine kendi DLL (Dynamic Link Library) dosyasını enjekte ederek çalışır.2 "DLL enjeksiyonu" olarak bilinen bu teknik, oyun motoruna doğrudan bağlanmasına ve simülasyon döngüsünü manipüle etmesine olanak tanır. Bu, modlama araçları, hata ayıklayıcılar ve performans izleme yazılımları için meşru ve güçlü bir yöntemdir. Ancak, aynı zamanda kötü amaçlı yazılımların bir programın davranışını ele geçirmek için kullandığı birincil tekniktir. Dolayısıyla, antivirüs yazılımı, niyetin iyi huylu olmasına rağmen kullanılan yöntem nedeniyle doğru bir şekilde uyarı vermektedir.
+Bu durumu çözmek için en güvenli yöntem, antivirüs yazılımınızın ayarlarından ModLoader'ın kurulum dizini için bir klasör istisnası eklemektir. Bu dizin genellikle C:\Users\KullanıcıAdı\AppData\Local\TMLoader\ konumundadır.1 Bu, antivirüsün bu klasördeki dosyaları taramasını engelleyerek aracın sorunsuz çalışmasını sağlar.
+
+
+1.4. Yetenekleri Genişletme: TMUnlimiter Entegrasyonu
+
+
+TMUnlimiter, harita editörünün yeteneklerini büyük ölçüde genişleten popüler bir eklentidir ve TMInterface ile birlikte kullanılabilir.5 Bu entegrasyon, modlama topluluğu içindeki birlikte çalışabilirliği gösterir. TMUnlimiter'ı TMInterface ile birlikte yüklemek için, TMInterface konsoluna, oyuncu profilinizi seçmeden önce load_infinity komutunu girmeniz gerekir.5 Bu komutun her başlangıçta otomatik olarak çalıştırılması için bir yapılandırma dosyasına eklenmesi de mümkündür.
+
+
+1.5. Determinizm Uyarısı
+
+
+TMUnlimiter entegrasyonu güçlü yetenekler sunsa da, veri analizi veya yapay zeka eğitimi gibi hassas projeler için kritik bir uyarıyı da beraberinde getirir. TMUnlimiter ile oluşturulmuş bazı haritalar, deterministik (belirlenimci) olmayan fiziklere sahip olabilir.5 Deterministik olmama durumu, aynı girdi setinin her yarış yeniden başlatıldığında aynı sonucu üretmeyeceği anlamına gelir. Bu, bilimsel deneyleri geçersiz kılabilir, Tool-Assisted Speedrun (TAS) betiklerini işe yaramaz hale getirebilir ve yapay zeka ajanlarının öğrenme sürecini baltalayabilir. Veriye duyarlı uygulamalar geliştirirken, testlerin resmi Nadeo haritalarında veya deterministik olduğu onaylanmış topluluk haritalarında yapılması şiddetle tavsiye edilir.
+
+
+Bölüm 2: TMInterface Komut Konsolu: Kapsamlı Bir Başvuru Kılavuzu
+
+
+TMInterface konsolu, aracın birincil kullanıcı arayüzüdür ve oyun durumunu manipüle etmek, betikleri yönetmek ve geliştirme sürecinde hata ayıklamak için güçlü bir mekanizma sunar.2 Bu bölüm, konsolun tüm yeteneklerini ortaya koyan ve kullanıcıyı bir geliştirme projesi bağlamında stratejik olarak güçlendiren eksiksiz bir başvuru kılavuzu olarak tasarlanmıştır.
+
+
+2.1. Konsol Etkileşimi ve Sözdizimi
+
+
+Konsol komutları genellikle komut [parametre] yapısını takip eder. Araç, kullanıcı deneyimini iyileştirmek için çeşitli özellikler sunar. Örneğin, map komutunu kullanırken harita isimleri için otomatik tamamlama özelliği mevcuttur. Daha karmaşık iş akışları için, alias komutu kullanılarak çoklu komutlardan oluşan makrolar oluşturulabilir veya bind komutu ile bu komut dizileri belirli klavye tuşlarına atanabilir.2 Bu, tekrarlayan görevleri otomatikleştirmek ve test döngülerini hızlandırmak için son derece yararlıdır.
+Örneğin, bir test senaryosunu sıfırlamak için sıkça kullanılan bir komut dizisi şu şekilde bir takma ada (alias) atanabilir:
+alias reset_run "load_state initial.bin; set speed 1; load inputs.txt"
+Bu takma ad, tek bir reset_run komutuyla, başlangıç durumunu yüklemeyi, simülasyon hızını normale döndürmeyi ve test girdilerini içeren betiği yüklemeyi sağlar.
+
+
+2.2. Komut Başvuru Tablosu
+
+
+Aşağıdaki tablo, TMInterface'de bulunan komutların kapsamlı bir listesini sunar. Bu tablo, komutları işlevsel kategorilere ayırarak, sözdizimlerini örneklerle açıklayarak ve en önemlisi, bir geliştirme projesi bağlamındaki pratik kullanım senaryolarını detaylandırarak standart bir komut listesinin ötesine geçer.
+
+
+Komut
+	Sözdizimi ve Örnek
+	Kategori
+	Açıklama ve Kullanım Senaryosu
+	help
+	help
+	Genel
+	Mevcut tüm komutlar için kısa bir yardım metni görüntüler.
+	quit
+	quit
+	Genel
+	Oyun sürecini derhal sonlandırır.
+	set
+	set speed 2.5
+	Simülasyon ve Oynatma
+	Bir TMInterface iç değişkenini değiştirir. speed değişkeni, testleri hızlandırmak için kritik olan oyun simülasyon hızını kontrol eder. Diğer önemli değişkenler arasında autologin ve discord_presence bulunur.2
+	vars
+	vars speed
+	Genel
+	Mevcut tüm değişkenleri ve değerlerini listeler. Parametresiz kullanıldığında, tüm ayarları yeniden üretmek için kullanılabilecek bir yapılandırma dizesini panoya kopyalar.
+	bind
+	bind f1 "save_state quicksave.bin"
+	Genel
+	Bir klavye tuşunu bir komuta veya komut dizisine bağlar. Hızlı kaydetme/yükleme gibi sık kullanılan işlevler için vazgeçilmezdir.
+	alias
+	alias pr "press right"
+	Genel
+	Bir komuta daha kısa bir takma ad atar. Karmaşık veya uzun komutları basitleştirmek için kullanılır.2
+	map
+	map A01-Race.Challenge.Gbx
+	Genel
+	Belirtilen haritayı Tracks klasöründen anında yükler. Harita adları için otomatik tamamlama desteği vardır.
+	press
+	1500 press left
+	Girdi Kontrolü
+	Belirtilen bir zamanda bir tuşa basma eylemini simüle eder. up, down, left, right, enter, delete gibi eylemleri destekler.
+	rel
+	2500 rel left
+	Girdi Kontrolü
+	press ile basılmış bir tuşu serbest bırakır.
+	steer
+	3000 steer 32768
+	Girdi Kontrolü
+	Aracı analog bir değerle yönlendirir. Değer aralığı [-65536, 65536]'dır. Bu, klavyenin dijital girdilerinden daha hassas kontrol sağlar ve yapay zeka ajanları için idealdir.
+	load
+	load my_script.txt
+	Simülasyon ve Oynatma
+	Zamanlanmış girdiler içeren bir betik dosyasını yükler. Bu, programatik olarak oluşturulan sürüş yollarını test etmenin birincil yoludur.
+	replay
+	replay
+	Simülasyon ve Oynatma
+	Editörde en son doğrulanmış tekrar oynatımından (replay) girdileri yükler. Mevcut bir sürüşü analiz etmek veya bir bruteforce oturumu başlatmak için ilk adımdır.
+	save_state
+	save_state initial_state.bin
+	Durum Yönetimi
+	Yarışın tam fiziksel durumunu bir dosyaya kaydeder. Yapay zeka ajanlarını test etmek veya belirli segmentleri bruteforce ile optimize etmek için deterministik başlangıç noktaları oluşturmak için temel bir araçtır.
+	load_state
+	load_state initial_state.bin
+	Durum Yönetimi
+	save_state ile kaydedilmiş bir durumu anında geri yükler. Hızlı ve tekrarlanabilir deneyler yapılmasını sağlar.
+	tp
+	tp 100 50 200
+	Hata Ayıklama/Hileler
+	Aracı belirtilen X, Y, Z koordinatlarına ışınlar. Sürüşü geçersiz kılar ancak haritanın belirli bölümlerini oraya sürmeden test etmek için paha biçilmezdir.
+	finish
+	finish
+	Hata Ayıklama/Hileler
+	Mevcut yarışı zorla bitirir. Haritayı tamamlamadan tekrar oynatımını kaydetmek (örneğin, girdileri almak için) gerektiğinde kullanışlıdır.2
+	toggle_info
+	toggle_info
+	Widget'lar
+	Aracın pozisyon, hız ve rotasyon gibi ham vektör verilerini gösteren bir bilgi penceresini açar/kapatır. Veri çıkarma boru hattını doğrulamak için kullanışlıdır.
+	add_trigger
+	add_trigger 0 0 0 10 10 10
+	Bruteforcing
+	Araç belirtilen küboid alana girdiğinde araç durumunu değerlendirmek için bir tetikleyici ekler. Bruteforce optimizasyonunun temel bir parçasıdır.
+	
+
+Bölüm 3: TMNF ile Arayüz Oluşturma: İki API'nin Hikayesi
+
+
+TMInterface ile programatik etkileşim kurma süreci, aracın teknolojik evrimini yansıtan iki farklı mimari yaklaşımı anlamayı gerektirir. Kullanıcının başlangıçtaki Python API kullanma varsayımı, artık güncel olmayan bir teknolojiye dayanmaktadır. Bu bölüm, bu mimari değişimi net bir şekilde açıklayarak, geliştiricileri eski ve sürdürülemez bir temel üzerine proje inşa etmekten alıkoymayı ve onları modern, daha güçlü bir yaklaşıma yönlendirmeyi amaçlamaktadır.
+
+
+3.1. Eski Yol: Python Sunucu API'si (TMInterface < 2.0.0)
+
+
+TMInterface'in 2.0.0'dan önceki sürümleri, Python ile etkileşim için bir sunucu-istemci modeli sunuyordu. Bu modelde, pip install tminterface komutuyla kurulabilen bir Python istemci kütüphanesi mevcuttu.9 Bu kütüphane, TMInterface tarafından çalıştırılan bir sunucuya bağlanarak oyun durumunu değiştirme yeteneği sağlıyordu.9
+Ancak bu API'nin kritik sınırlamaları vardır:
+* Eski ve Bakımsız: Bu API, geliştiricisi tarafından açıkça "eski" ve "bakımı yapılmayan" olarak etiketlenmiştir.9
+* Sürüm Kısıtlaması: Yalnızca TMInterface'in 1.4.3 veya daha eski sürümleriyle çalışmaktadır.9
+* Mimari Kısıtlamalar: Mimarisi, işlem dışı (out-of-process) bir yapıya dayanır. TMInterface bir sunucu çalıştırır ve Python betiği bir istemci olarak yerel bir ağ soketi üzerinden iletişim kurar. Bu yaklaşım, modern yönteme kıyasla daha yüksek gecikme süresine (latency) ve oyun durumuna daha az doğrudan erişime sahiptir. Verilerin serileştirilmesi/deserileştirilmesi ve işlemler arası bağlam değiştirme (context switching) gibi ek yükler, gerçek zamanlı ve hassas uygulamalar için bir dezavantaj oluşturur.
+Bu bilgiler, eski projelerin bakımını yapmak zorunda olanlar için tarihsel bir bağlam sunsa da, yeni projeler için bu yol kesinlikle önerilmemektedir.
+
+
+3.2. Modern Yol: AngelScript Eklenti API'si (TMInterface ≥ 2.0.0)
+
+
+TMInterface'in 2.0.0 ve sonrası sürümleri, Python API'sini kaldırarak yerine çok daha güçlü ve entegre bir çözüm olan AngelScript API'sini getirmiştir.2 AngelScript, doğrudan aracın içine gömülmüş, C++ benzeri sözdizimine sahip bir betik dilidir.12
+Bu geçiş, "uzaktan kontrol" felsefesinden "derin entegrasyon" felsefesine stratejik bir kaymayı temsil eder. Bu mimari değişim, rastgele bir karar olmayıp, gelişmiş TAS teknikleri ve bruteforcing gibi performans açısından son derece hassas uygulamaların gerektirdiği mikrosaniye düzeyinde zamanlama ve doğrudan bellek erişimi ihtiyacından kaynaklanmıştır. İşlem dışı bir API'nin güvenilir bir şekilde sağlayamayacağı bu performans seviyesi, AngelScript ile mümkün hale gelmiştir.
+AngelScript eklentilerinin mimari avantajları ve yetenekleri şunlardır:
+* İşlem İçi (In-Process) Çalışma: AngelScript eklentileri, oyunla aynı işlem alanında çalışır. Bu, neredeyse sıfır gecikme süresi ve oyunun simülasyon döngüsüne ve bellek yapılarına doğrudan, granüler erişim sağlar.
+* Geniş Yetenek Yelpazesi: Eklentiler, özel bruteforce algoritmaları uygulamak, yeni kullanıcı arayüzü widget'ları oluşturmak ve en önemlisi, her bir karede (per-frame) araç durumunu okuyup girdileri enjekte etmek gibi görevleri yerine getirebilir.11
+* Kolay Başlangıç: Yeni bir eklenti oluşturmak oldukça basittir. TMInterface'in Ayarlar > Eklentiler sekmesinden "Yeni Eklenti Oluştur" düğmesine tıklanarak yeni bir eklenti projesi başlatılabilir. Eklenti dosyaları (.as uzantılı), Belgelerim/TMInterface/Plugins klasöründe saklanır ve kodda yapılan herhangi bir değişiklik, eklentinin oyun içinde otomatik olarak yeniden yüklenmesini tetikler.6
+Bu modern yaklaşım, TMInterface'in tüm potansiyelini ortaya çıkaran, performanslı ve sürdürülebilir bir geliştirme ortamı sunar. Kullanıcının asıl hedefi olan Python ile veri işleme hala mümkündür, ancak bu yeni mimariye saygı duyarak ve yüksek performanslı AngelScript katmanını atlamadan gerçekleştirilmelidir.
+
+
+Bölüm 4: Python ile Gerçek Zamanlı Veri Çıkarma: Hibrit Bir Yaklaşım
+
+
+Bu bölüm, raporun pratik ve merkezi kısmıdır. Kullanıcının Python kullanma arzusunu, modern AngelScript API'sinin gerçekliğiyle birleştiren yenilikçi bir çözüm sunar. Burada, oyun içindeki AngelScript ortamı ile harici Python uygulaması arasında sağlam bir veri boru hattı tasarlanacak ve inşa edilecektir.
+
+
+4.1. Zorluk: İşlem İçi Betikleme ile Harici Uygulamaları Köprüleme
+
+
+Temel sorun, iki ayrı ortam arasında bir iletişim kanalı kurmaktır. Gerçek zamanlı oyun verileri, TMInterface/AngelScript ortamının içinde mevcuttur. Kullanıcının veri işleme, analiz veya yapay zeka mantığı ise ayrı bir Python sürecinde yer alacaktır. Bu iki süreci birbirine bağlamak için bir İşlemler Arası İletişim (Inter-Process Communication - IPC) mekanizmasına ihtiyaç vardır. TMAI projesi gibi topluluk projeleri, oyun durumunu almak için ayrı bir Python iş parçacığında (thread) bir istemci çalıştırarak bu tür bir mimari yaklaşımın geçerliliğini kanıtlamıştır.14
+
+
+4.2. Çözüm: Dosya Tabanlı Bir AngelScript-Python Veri Köprüsü Mimarisi
+
+
+Bu iki ortam arasında köprü kurmak için çeşitli IPC mekanizmaları (soketler, bellek eşlemeli dosyalar, vb.) düşünülebilse de, AngelScript gibi sanal bir betik ortamının kısıtlamaları göz önüne alındığında, en basit, en sağlam ve evrensel olarak uyumlu yöntem, yüksek frekanslı dosya G/Ç (Giriş/Çıkış) işlemidir. Bu mimaride, AngelScript eklentisi yüksek frekanslı bir veri üreticisi olarak hareket ederken, Python betiği bir veri tüketicisi olarak çalışır.
+Bu yaklaşım, bellek eşlemeden biraz daha az performanslı olsa da, uygulanması ve hata ayıklaması çok daha kolaydır ve gerçek zamanlı veri akışı için yeterli hızı sağlar.
+
+
+4.3. Bölüm A: AngelScript Yayıncı Eklentisi
+
+
+Bu eklentinin görevi, her simülasyon adımında oyun motorundan araç verilerini toplamak ve bu verileri yapılandırılmış bir formatta harici bir dosyaya yazmaktır.
+Uygulama Adımları ve Örnek Kod:
+1. OnSimulationStep Kancasını Kullanma: AngelScript API'si, oyunun her fizik karesinde çağrılan OnSimulationStep gibi geri arama (callback) işlevleri sağlar. Veri toplama mantığımız bu işlevin içine yerleştirilecektir.11
+2. Veri Toplama: Bu işlev içinde, TMInterface API'si aracılığıyla aracın temel durum vektörlerine erişilir.
+3. Serileştirme ve Yazma: Toplanan veriler, Python tarafından kolayca ayrıştırılabilecek basit bir metin formatına (örneğin, virgülle ayrılmış değerler - CSV) dönüştürülür ve her karede belirlenmiş bir geçici dosyanın üzerine yazılır.
+Aşağıda, bu mantığı uygulayan temel bir AngelScript eklentisi (.as dosyası) örneği verilmiştir:
+
+
+AngelScript
+
+
+
+
+// Bu betik, Belgelerim/TMInterface/Plugins/ klasörüne yerleştirilmelidir.
+
+#include "tmi"
+
+// Verilerin yazılacağı dosyanın yolu.
+const string IPC_FILE_PATH = "C:/Users/KullaniciAdi/Documents/TMInterface/ipc_data.tmp";
+
+// Her simülasyon adımında (karede) bu fonksiyon çağrılır.
+void OnSimulationStep(int time) {
+   // Simülasyon yöneticisinden mevcut araç durumunu al.
+   auto sim = GetSimulation();
+   if (sim is null) return;
+
+   // Temel araç verilerini al.
+   Vec3 pos = sim.Position;
+   Vec3 vel = sim.Velocity;
+   float speed = sim.DisplaySpeed;
+   // Yaw, Pitch, Roll (radyan cinsinden)
+   float yaw = sim.Yaw; 
+   float pitch = sim.Pitch;
+   float roll = sim.Roll;
+
+   // Verileri virgülle ayrılmış bir dize olarak formatla.
+   string data_line = time + "," + 
+                      pos.x + "," + pos.y + "," + pos.z + "," +
+                      vel.x + "," + vel.y + "," + vel.z + "," +
+                      speed + "," + yaw + "," + pitch + "," + roll;
+
+   // Dosyayı yazma modunda aç.
+   file f;
+   if (f.open(IPC_FILE_PATH, "w") < 0) {
+       // Hata durumunda konsola mesaj yaz.
+       print("IPC dosyasi acilamadi!");
+       return;
+   }
+
+   // Veri dizesini dosyaya yaz ve dosyayı kapat.
+   f.writeString(data_line);
+   f.close();
+}
+
+
+
+4.4. Bölüm B: Python Dinleyici Betiği
+
+
+Bu Python betiğinin görevi, AngelScript tarafından sürekli güncellenen geçici dosyayı verimli bir şekilde izlemek, okumak ve içindeki verileri kullanılabilir bir Python veri yapısına dönüştürmektir.
+Uygulama Adımları ve Örnek Kod:
+1. Dosya İzleme: Betik, ipc_data.tmp dosyasını sürekli olarak değişiklikler için yoklar. Düşük gecikme süresi sağlamak için verimli bir okuma döngüsü kullanılır.
+2. Deserileştirme ve Ayrıştırma: Dosyadan okunan CSV dizesi, split(',') yöntemiyle ayrıştırılır ve değerler uygun veri tiplerine (float, int) dönüştürülür.
+3. Veri Yapılandırma: Ayrıştırılan veriler, kolay erişim için bir sözlük (dictionary) veya özel bir sınıf nesnesi içinde saklanır.
+4. Gerçek Zamanlı İşleme: Bu döngü içinde, elde edilen car_state nesnesi, bir yapay zeka modelini beslemek, bir kontrolcüye girdi sağlamak veya bir arayüzü güncellemek için kullanılabilir.
+Aşağıda, bu mantığı uygulayan temel bir Python betiği örneği verilmiştir:
+
+
+Python
+
+
+
+
+import time
+import os
+
+# AngelScript tarafından yazılan dosyanın yolu.
+IPC_FILE_PATH = "C:/Users/KullaniciAdi/Documents/TMInterface/ipc_data.tmp"
+POLL_INTERVAL_SECONDS = 0.001 # 1ms'de bir kontrol et
+
+class CarState:
+   def __init__(self, data_line):
+       parts = data_line.strip().split(',')
+       if len(parts) == 11:
+           self.time = int(parts)
+           self.pos_x, self.pos_y, self.pos_z = map(float, parts[1:4])
+           self.vel_x, self.vel_y, self.vel_z = map(float, parts[4:7])
+           self.speed = float(parts)
+           self.yaw, self.pitch, self.roll = map(float, parts[8:11])
+       else:
+           self.time = 0 # Geçersiz veri
+
+   def __str__(self):
+       return (f"Time: {self.time}ms | "
+               f"Pos: ({self.pos_x:.2f}, {self.pos_y:.2f}, {self.pos_z:.2f}) | "
+               f"Speed: {self.speed:.2f} km/h")
+
+def main():
+   print("Python IPC Dinleyici Başlatıldı. Veri bekleniyor...")
+   last_modified_time = 0
+   
+   try:
+       while True:
+           if not os.path.exists(IPC_FILE_PATH):
+               time.sleep(0.1)
+               continue
+
+           current_modified_time = os.path.getmtime(IPC_FILE_PATH)
+           
+           # Sadece dosya güncellendiğinde oku
+           if current_modified_time > last_modified_time:
+               last_modified_time = current_modified_time
+               try:
+                   with open(IPC_FILE_PATH, 'r') as f:
+                       line = f.readline()
+                       if line:
+                           car_state = CarState(line)
+                           # Veri boru hattının çalıştığını göstermek için konsola yazdır.
+                           # Gerçek bir uygulamada bu veriler işlenir.
+                           print(car_state, end='\r')
+               except IOError:
+                   # Dosya AngelScript tarafından yazılırken okuma hatası olabilir, normaldir.
+                   pass
+           
+           time.sleep(POLL_INTERVAL_SECONDS)
+
+   except KeyboardInterrupt:
+       print("\nDinleyici durduruldu.")
+
+if __name__ == "__main__":
+   main()
+
+Bu hibrit mimari, her iki dünyanın da en iyi yönlerini birleştirir: AngelScript'in oyun motoruna düşük gecikmeli, doğrudan erişimi ve Python'un zengin veri işleme, makine öğrenmesi ve bilimsel hesaplama kütüphaneleri ekosistemi.
+
+
+Bölüm 5: İleri Düzey Uygulamalar ve Teknikler
+
+
+Temel veri çıkarma boru hattı kurulduktan sonra, sadece veri okumanın ötesine geçerek oyunu aktif olarak kontrol etmek ve sofistike deneyler yürütmek mümkün hale gelir. Bu bölüm, bu ileri düzey yeteneklerin nasıl kullanılacağını detaylandırmaktadır.
+
+
+5.1. Programatik Kontrol: Girdi Betiklerini Yazma
+
+
+TMInterface, .txt dosyalarından zamanlanmış girdi betiklerini yükleyip yürütebilir.15 Bu betiklerin formatı son derece basittir: zaman_damgası komut eylem. Örneğin, 2000 press left komutu, yarışın 2. saniyesinde sol yön tuşuna basılmasını sağlar.
+Bu özellik, veri boru hattını bir geri besleme döngüsüne dönüştürmenin anahtarıdır. Python uygulamanız artık sadece bir dinleyici değil, aynı zamanda bir kontrolcü olabilir. Bir yapay zeka ajanı, mevcut araç durumunu (Bölüm 4'te elde edilen) analiz edebilir, bir sonraki hamle dizisine karar verebilir, bu hamleleri bir inputs.txt dosyasına yazabilir ve ardından TMInterface'e load inputs.txt komutunu göndererek bu sürüşü oyunda yürütebilir. Bu, veriye dayalı otonom sürüş ajanları geliştirmek için tam bir döngü oluşturur.
+
+
+5.2. Deterministik Test: Kayıt Durumlarında (Save States) Ustalaşma
+
+
+TMInterface'in en güçlü özelliklerinden biri, save_state ve load_state komutlarıdır. Bu komutlar, yarışın tüm fiziksel durumunun (aracın konumu, hızı, momentumu, tekerlek durumu vb.) anında ve mükemmel bir şekilde kaydedilip geri yüklenmesini sağlar. Bu, hem TAS hem de yapay zeka eğitimi için bir köşe taşıdır.
+Bu özellik, hızlı, deterministik ve tekrarlanabilir deneyler için bir iş akışı oluşturulmasına olanak tanır:
+1. Başlangıç Noktası Belirleme: Haritanın zorlu bir virajı gibi belirli bir test senaryosunun başlangıcına sürün ve save_state corner_entry.bin komutuyla durumu kaydedin.
+2. Girdi Oluşturma: Python betiğiniz, bu virajı geçmek için bir girdi dizisi (örneğin, direksiyon açıları ve süreleri) oluşturur ve bunu test_run.txt dosyasına yazar.
+3. Yürütme: TMInterface'e load_state corner_entry.bin ve ardından load test_run.txt komutları gönderilir. Oyun anında başlangıç durumuna döner ve oluşturulan girdileri yürütür.
+4. Analiz: Yarış sırasında, Python betiği sonuçları (örneğin, viraj çıkış hızı, izlenen yol) gerçek zamanlı olarak analiz eder.
+5. İterasyon: Betik, analiz sonuçlarına göre girdi dizisini değiştirir ve 3. adıma geri dönerek deneyi anında tekrarlar.
+Bu döngü, saniyeler içinde binlerce farklı yaklaşımın test edilmesini sağlayarak optimizasyon sürecini muazzam ölçüde hızlandırır. TMInterface geliştiricisinin belirttiği gibi, bu yetenek, oyun simülasyonunu normal hızın yaklaşık 60 katına kadar hızlandırarak bruteforce işlevselliğini mümkün kılar.16
+
+
+5.3. Bruteforcing'e Giriş
+
+
+Bruteforcing, TMNF bağlamında, en hızlı yolu bulmak için binlerce küçük girdi varyasyonunu hızla test etmek amacıyla kayıt durumlarını (save states) ve yüksek hızlı simülasyonu kullanma tekniğidir. TMInterface, yerleşik bruteforce yetenekleri içerir ve Sai-Moen'in Wallhugger modülü gibi özel betiklerle genişletilebilir.6
+Bruteforcing'in temel kavramları şunlardır:
+* Temel Tekrar Oynatımı (Base Replay): Optimize edilecek bir temel sürüş kaydedilir ve replay komutuyla yüklenir.
+* Tetikleyiciler (Triggers): Harita üzerinde add_trigger komutuyla sanal kutular oluşturulur. Araç bu kutulara girdiğinde, bir "değerlendirme fonksiyonu" çalışır.
+* Değerlendirme Fonksiyonu: Bu fonksiyon, aracın durumunu (örneğin, hızı, konumu) değerlendirir ve temel tekrar oynatımına göre bir iyileşme olup olmadığını belirler.
+* Mutasyon: Bruteforcer, temel girdileri rastgele olarak (ancak bf_modify_prob gibi parametrelerle kontrol edilen bir olasılıkla) değiştirir ve her bir varyasyonu yüksek hızda simüle eder.17
+* İyileştirme: Değerlendirme fonksiyonu bir iyileşme tespit ederse, yeni, daha iyi girdi seti yeni temel olarak kaydedilir ve süreç devam eder.
+Bu teknik, insan sezgisinin veya manuel denemenin bulamayacağı, milisaniyelik optimizasyonlar ve beklenmedik yollar keşfetmek için son derece güçlüdür.
+
+
+Bölüm 6: Sorun Giderme ve Topluluk Kaynakları
+
+
+Geliştirme sürecinde karşılaşılabilecek yaygın sorunları çözmek ve daha fazla bilgiye ulaşmak için bu bölüm pratik bir destek kılavuzu olarak hizmet vermektedir.
+
+
+6.1. Sorun Giderme Matrisi
+
+
+Aşağıdaki tablo, kullanıcıların sıkça karşılaştığı sorunları, olası nedenlerini ve önerilen çözümleri yapılandırılmış bir formatta sunar.
+
+
+Sorun / Belirti
+	Olası Neden
+	Önerilen Çözüm
+	TMInterface penceresi görünmüyor; oyun normal şekilde başlıyor.
+	TMNF başlangıç isteminde "Oynat" ve "Bu ayarı her zaman kullan" seçeneğini, "Ayarlar" yerine seçtiniz.
+	Bu tercihi sıfırlamanız gerekir. Genellikle, oyunu başlatırken SHIFT gibi bir tuşa basılı tutmak, istemin yeniden görünmesini zorlayabilir. ModLoader/TMInterface'in oyuna bağlanmasına izin vermek için "Ayarlar"ı seçin.18
+	TAS betiğim bir kez çalışıyor ancak yarışı yeniden başlattıktan sonra başarısız oluyor.
+	Harita TMUnlimiter ile oluşturulmuş ve deterministik olmayan fiziklere sahip veya TMUnlimiter yüklenmesi gerektiği halde yüklenmemiş.
+	Yarışa başlamadan önce load_infinity komutunun çalıştırıldığından emin olun. Sorun devam ederse, haritanın kendisi muhtemelen deterministik değildir. Betiklerinizi doğrulamak için resmi Nadeo haritalarında test edin.5
+	Bruteforcer çalışıyor ancak hiçbir zaman bir iyileştirme bulamıyor veya bf_modify_prob uyarısı veriyor.
+	Girdi değiştirme olasılığı çok düşük veya değerlendirme kriterleri çok katı.
+	Öncelikle temel tekrar oynatımınızın temiz olduğundan emin olun. Ayarlarda, bf_modify_prob değerini daha yüksek bir değere (örneğin, %50 için 0.5) yükseltin. Araç durumunu anlamlı bir noktada değerlendirmek için tetikleyicilerinizin doğru yerleştirildiğinden emin olun.17
+	Antivirüs yazılımım TMInterface'i sürekli olarak siliyor veya engelliyor.
+	TMInterface, oyunun sürecine bir DLL enjekte ederek çalışır. Bu davranış, antivirüs yazılımları tarafından şüpheli olarak algılanır.
+	Bu bir yanlış pozitiftir. Antivirüs yazılımınızın ayarlarından ModLoader kurulum dizini (C:\Users\...\AppData\Local\TMLoader\) için bir klasör istisnası ekleyin.1
+	
+
+6.2. Ek Kaynaklar
+
+
+Tek bir belge hiçbir zaman kapsamlı olamaz. TrackMania modlama topluluğu, bilgi ve destek için hayati bir kaynaktır. Aşağıda, daha fazla yardım alabileceğiniz, güncel kalabileceğiniz ve yeni sorular sorabileceğiniz aktif toplulukların bir listesi bulunmaktadır:
+* Discord Sunucuları: TMInterface ve genel TAS toplulukları için resmi ve gayriresmi birçok Discord sunucusu mevcuttur. MapHunters gibi gruplar, yeni başlayanlar için davet bağlantıları paylaşmaktadır.19
+* r/TrackMania Subreddit: Hem genel TrackMania tartışmaları hem de TMInterface ile ilgili spesifik sorular için aktif bir merkezdir.17
+* GitHub Depoları:
+   * TMInterface Genel Kaynakları: Aracın kendisiyle ilgili genel, açık kaynaklı dosyaların bulunduğu yer.24
+   * Eski Python İstemcisi: Artık desteklenmese de, eski Python API'sinin kaynak kodunu incelemek için.9
+   * Topluluk Eklentileri: Sai-Moen'in AngelScript eklentileri gibi projeler, kendi eklentilerinizi geliştirirken mükemmel birer referans noktasıdır.25
+
+
+Sonuç
+
+
+Bu teknik kılavuz, TrackMania Nations Forever'dan TMInterface aracılığıyla gerçek zamanlı veri çıkarma görevini modern ve sürdürülebilir bir perspektiften ele almıştır. Analiz, aracın teknolojik evrimini ortaya koymuş ve geliştiricileri, artık güncel olmayan ve bakımı yapılmayan Python sunucu API'sinden, performans ve esneklik açısından üstün olan modern AngelScript eklenti mimarisine yönlendirmiştir.
+Raporun merkezinde, bu iki farklı teknoloji dünyası arasında bir köprü kuran hibrit, dosya tabanlı bir IPC (İşlemler Arası İletişim) mimarisi yer almaktadır. Bu çözüm, AngelScript'in oyun motoruna anlık ve düşük gecikmeli erişim gücünü, Python'un zengin veri bilimi, makine öğrenmesi ve otomasyon ekosistemiyle birleştirir. Sunulan AngelScript "yayıncı" ve Python "dinleyici" kod örnekleri, bu mimariyi hayata geçirmek için somut bir başlangıç noktası sağlamaktadır.
+Ayrıca, girdi betiklerinin programatik olarak oluşturulması ve kayıt durumlarının (save states) deterministik testler için kullanılması gibi ileri düzey teknikler, bu veri boru hattının sadece pasif bir veri toplayıcıdan, aktif bir oyun kontrolcüsüne ve güçlü bir deney platformuna nasıl dönüştürülebileceğini göstermiştir.
+Sonuç olarak, bu kılavuzda özetlenen yaklaşım, Python kullanarak TMInterface'in tüm potansiyelini ortaya çıkarmak için sağlam, esnek ve geleceğe dönük bir yöntem sunarak, harici veri işleme veya yapay zeka uygulamaları geliştirmek isteyen herkes için kapsamlı bir yol haritası teşkil etmektedir.
+Works cited
+1. First, download the latest version of the TrackMania ModLoader installer - TMInterface Guide, accessed October 24, 2025, https://donadigo.com/tminterface/installation
+2. TMInterface - donadigo, accessed October 24, 2025, https://donadigo.com/tminterface/
+3. TMInterface is a virus? - TrackMania - Reddit, accessed October 24, 2025, https://www.reddit.com/r/TrackMania/comments/om40h3/tminterface_is_a_virus/
+4. Anybody know why TMInterface is recognized as a trojan by windows defender? - Reddit, accessed October 24, 2025, https://www.reddit.com/r/TrackMania/comments/pp6pc2/anybody_know_why_tminterface_is_recognized_as_a/
+5. Playing with TMUnlimiter - TMInterface Guide, accessed October 24, 2025, https://donadigo.com/tminterface/playing-with-infinity
+6. Track Mania Scripting Quickstart - Finding Seconds, accessed October 24, 2025, https://www.findingseconds.com/track-mania-scripting-quickstart/
+7. Available commands - TMInterface Guide - donadigo, accessed October 24, 2025, https://donadigo.com/tminterface/commands
+8. Variables - TMInterface Guide, accessed October 24, 2025, https://donadigo.com/tminterface/variables
+9. donadigo/TMInterfaceClientPython - GitHub, accessed October 24, 2025, https://github.com/donadigo/TMInterfaceClientPython
+10. tminterface - PyPI, accessed October 24, 2025, https://pypi.org/project/tminterface/
+11. Angelscript Scripting Guide - donadigo, accessed October 24, 2025, https://donadigo.com/tminterface/plugins/intro
+12. AngelScript - AngelCode.com, accessed October 24, 2025, https://www.angelcode.com/angelscript/
+13. AngelScript Developer Hiring Guide - Product Perfect, accessed October 24, 2025, https://www.productperfect.com/hiring-guide-copy/angelscript
+14. LouisDeOliveira/TMAI: A real-time TrackMania Nations Forever gym environnement for Reinforcement Learning. - GitHub, accessed October 24, 2025, https://github.com/LouisDeOliveira/TMAI
+15. Your first script - TMInterface Guide, accessed October 24, 2025, https://donadigo.com/tminterface/first-script
+16. The History of Machine Learning in Trackmania - Hacker News, accessed October 24, 2025, https://news.ycombinator.com/item?id=40853834
+17. TMInterface help : r/TrackMania - Reddit, accessed October 24, 2025, https://www.reddit.com/r/TrackMania/comments/wsgl3b/tminterface_help/
+18. tminterface not opening : r/TrackMania - Reddit, accessed October 24, 2025, https://www.reddit.com/r/TrackMania/comments/1i42fg6/tminterface_not_opening/
+19. Trackmania Tas Compilation - Part 27 | TMInterface Runs - YouTube, accessed October 24, 2025, https://www.youtube.com/watch?v=-RjcxVG6g10
+20. Trackmania Tas Compilation - Part 33 | TMInterface Runs - YouTube, accessed October 24, 2025, https://www.youtube.com/watch?v=EPopSVvvuV8
+21. Trackmania Tas Compilation - Part 25 | TMInterface Runs - YouTube, accessed October 24, 2025, https://www.youtube.com/watch?v=A5Cw4nmXuOY
+22. tmnf competition patch and tm interface : r/TrackMania - Reddit, accessed October 24, 2025, https://www.reddit.com/r/TrackMania/comments/1db4w9w/tmnf_competition_patch_and_tm_interface/
+23. I know this may be the wrong place but what is this and where do I get them? (TMUF TMInterface) : r/TrackMania - Reddit, accessed October 24, 2025, https://www.reddit.com/r/TrackMania/comments/1gjywxn/i_know_this_may_be_the_wrong_place_but_what_is/
+24. donadigo/TMInterfacePublic: Public resources of TMInterface - a TAS tool for Trackmania Nations Forever - GitHub, accessed October 24, 2025, https://github.com/donadigo/TMInterfacePublic
+25. Sai-Moen/TMInterface-AS-SaiMoen: Collection of ... - GitHub, accessed October 24, 2025, https://github.com/Sai-Moen/TMInterface-AS-SaiMoen

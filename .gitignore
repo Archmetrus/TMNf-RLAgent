@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# TMInterface
+*.tmp
+*.bin
+realtime_data.tmp
+ipc_data.tmp
+
+# Test verisi ve loglar
+tm_hybrid_logs/
+tm_rl_logs/
+race_data.json
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# TMInterface state dosyaları
+States/*.bin
+
+# Replay dosyaları (opsiyonel - büyük olabilir)
+*.Replay.Gbx
+
+# Geçici config dosyaları
+config.txt
+builtin.txt
+
