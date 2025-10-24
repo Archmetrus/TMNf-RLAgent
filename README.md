@@ -65,7 +65,8 @@ Normal race modunda yarışı başlatın (ENTER).
 
 Python terminalinde gerçek zamanlı veri göreceksiniz:
 ```
-Zaman:   1500ms | Pozisyon: (245.32, 15.67, 128.90) | Hiz: 185.45 km/h
+T:  1500ms | Pos:(245.32, 15.67,128.90) | Hiz:185.45km/h | Rot:(  5.3, -2.1,  0.8) | CP:2 L:1
+T:  1600ms | Pos:(252.11, 15.89,131.23) | Hiz:192.33km/h | Rot:(  5.5, -1.8,  0.5) | CP:2 L:1
 ```
 
 ## 📊 Veri Formatı
@@ -73,15 +74,18 @@ Zaman:   1500ms | Pozisyon: (245.32, 15.67, 128.90) | Hiz: 185.45 km/h
 Her 100ms'de bir güncellenen CSV formatında veri:
 
 ```csv
-zaman,pos_x,pos_y,pos_z,vel_x,vel_y,vel_z,hiz
+zaman,pos_x,pos_y,pos_z,vel_x,vel_y,vel_z,hiz,yaw,pitch,roll,checkpoint,lap
 ```
 
 | Alan | Açıklama | Birim |
 |------|----------|-------|
 | `zaman` | Simülasyon zamanı | ms |
-| `pos_x, pos_y, pos_z` | Araç pozisyonu | metre |
+| `pos_x, pos_y, pos_z` | Araç pozisyonu (3D konum) | metre |
 | `vel_x, vel_y, vel_z` | Hız vektörü | m/s |
 | `hiz` | Toplam hız | km/h |
+| `yaw, pitch, roll` | Araç rotasyonu (Euler açıları) | radyan |
+| `checkpoint` | Geçilen checkpoint sayısı | sayı |
+| `lap` | Mevcut tur numarası | sayı |
 
 ## 🏗️ Mimari
 
@@ -141,13 +145,22 @@ data_dict = car_state.to_dict()
 #     json.dump(data_dict, f)
 ```
 
-### AngelScript Tarafında Veri Ekleme
+### AngelScript Tarafında Ek Veri
 
-`Plugins/RealtimeDataPublisher.as` dosyasında daha fazla veri ekleyebilirsiniz:
+`Plugins/RealtimeDataPublisher.as` dosyasında mevcut veriler:
 
-- `state.Quat` - Rotasyon quaternion
-- `simManager.PlayerInfo.RaceFinished` - Yarış durumu
-- `simManager.PlayerInfo.CheckpointStates` - Checkpoint bilgileri
+✅ **Pozisyon:** `pos_x, pos_y, pos_z` - 3D konum  
+✅ **Hız:** `vel_x, vel_y, vel_z, speed` - Hız vektörü ve toplam  
+✅ **Rotasyon:** `yaw, pitch, roll` - Euler açıları (radyan)  
+✅ **İlerleme:** `checkpoint, lap` - Checkpoint ve tur bilgisi  
+
+Eklenebilecek ek veriler:
+
+- `state.Quat` - Rotasyon quaternion (daha hassas)
+- `simManager.PlayerInfo.RaceFinished` - Yarış durumu (boolean)
+- `simManager.InputSteer` - Direksiyon girdisi
+- `simManager.InputGas` - Gaz pedalı
+- `simManager.InputBrake` - Fren pedalı
 
 ## 🐛 Sorun Giderme
 

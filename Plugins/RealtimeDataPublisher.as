@@ -1,6 +1,8 @@
 // TMInterface Gercek Zamanli Veri Yayincisi
 // OnRunStep callback kullaniyor - Normal race modunda calisir!
 
+const float PI = 3.14159265;
+
 void Main()
 {
     print("===========================================");
@@ -16,6 +18,11 @@ void Main()
     RegisterVariable("rt_vel_y", 0.0);
     RegisterVariable("rt_vel_z", 0.0);
     RegisterVariable("rt_speed", 0.0);
+    RegisterVariable("rt_yaw", 0.0);
+    RegisterVariable("rt_pitch", 0.0);
+    RegisterVariable("rt_roll", 0.0);
+    RegisterVariable("rt_checkpoint", 0);
+    RegisterVariable("rt_lap", 0);
     RegisterVariable("rt_data_csv", "");
     
     print("Konsol degiskenleri kaydedildi!");
@@ -54,11 +61,38 @@ void OnRunStep(SimulationManager@ simManager)
     // Hiz hesaplama (km/h)
     float speed = vel.Length() * 3.6;
     
+    // Rotasyon bilgileri (quaternion)
+    quat rotation = simManager.Dyna.CurrentState.Quat;
+    
+    // Quaternion'dan Euler acilarina cevirme
+    // Yaw (Z axis)
+    float yaw = Math::Atan2(2.0 * (rotation.w * rotation.z + rotation.x * rotation.y),
+                            1.0 - 2.0 * (rotation.y * rotation.y + rotation.z * rotation.z));
+    
+    // Pitch (Y axis)
+    float sinp = 2.0 * (rotation.w * rotation.y - rotation.z * rotation.x);
+    float pitch;
+    if (Math::Abs(sinp) >= 1.0) {
+        pitch = (sinp > 0 ? 1.0 : -1.0) * PI / 2.0;  // Math::Sign yerine
+    } else {
+        pitch = Math::Asin(sinp);
+    }
+    
+    // Roll (X axis)
+    float roll = Math::Atan2(2.0 * (rotation.w * rotation.x + rotation.y * rotation.z),
+                             1.0 - 2.0 * (rotation.x * rotation.x + rotation.y * rotation.y));
+    
+    // Checkpoint ve lap bilgisi
+    int currentCP = simManager.PlayerInfo.CurCheckpointCount;
+    int currentLap = simManager.PlayerInfo.CurLap;
+    
     // CSV formatinda veri hazirla
     string csv = raceTime + "," +
                  pos.x + "," + pos.y + "," + pos.z + "," +
                  vel.x + "," + vel.y + "," + vel.z + "," +
-                 speed;
+                 speed + "," +
+                 yaw + "," + pitch + "," + roll + "," +
+                 currentCP + "," + currentLap;
     
     // Konsol degiskenlerine yaz
     SetVariable("rt_time", raceTime);
@@ -69,6 +103,11 @@ void OnRunStep(SimulationManager@ simManager)
     SetVariable("rt_vel_y", vel.y);
     SetVariable("rt_vel_z", vel.z);
     SetVariable("rt_speed", speed);
+    SetVariable("rt_yaw", yaw);
+    SetVariable("rt_pitch", pitch);
+    SetVariable("rt_roll", roll);
+    SetVariable("rt_checkpoint", currentCP);
+    SetVariable("rt_lap", currentLap);
     SetVariable("rt_data_csv", csv);
     
     // Panoya kopyala (her 100ms'de bir, cok sik olmasin)
@@ -81,13 +120,15 @@ void OnRunStep(SimulationManager@ simManager)
         print("OnRunStep CALISIYOR!");
         print("Pozisyon: " + pos.ToString());
         print("Hiz: " + speed + " km/h");
+        print("Rotasyon: Yaw=" + yaw + " Pitch=" + pitch + " Roll=" + roll);
+        print("Checkpoint: " + currentCP + " | Lap: " + currentLap);
         print("CSV: " + csv);
         print("Pano guncelleniyor!");
     }
     
     // DEBUG: Her 5 saniyede bir
     if (raceTime % 5000 == 0 && raceTime > 0) {
-        print("OnRunStep! Zaman: " + raceTime + "ms, Hiz: " + speed + " km/h");
+        print("OnRunStep! Zaman: " + raceTime + "ms, Hiz: " + speed + " km/h, CP: " + currentCP);
     }
 }
 
