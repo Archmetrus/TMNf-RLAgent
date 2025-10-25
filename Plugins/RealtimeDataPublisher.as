@@ -1,7 +1,12 @@
 // TMInterface Gercek Zamanli Veri Yayincisi
 // OnRunStep callback kullaniyor - Normal race modunda calisir!
 
-const float PI = 3.14159265;
+// AngelScript'ten Python'a veri gondermek icin bir kopru kurar.
+// RL ajaninin komutlari `Scripts/action.txt` dosyasina yazilir.
+// Bu plugin, oyuna periyodik olarak o dosyayi `load` komutuyla yukletir.
+
+// PI sayisi
+const float PI = 3.14159256; // Daha hassas PI degeri
 
 void Main()
 {
@@ -46,6 +51,14 @@ void OnSimulationEnd(SimulationManager@ simManager, SimulationResult result)
 // NORMAL YARIS MODUNDA HER ADIMDA CAGRILIR!
 void OnRunStep(SimulationManager@ simManager)
 {
+    // --- KOMUT YUKLEME (YENI - DOSYA LOAD SISTEMI) ---
+    // Her 100ms'de bir, Python'un yazdigi action.txt dosyasini oyuna yukle.
+    // Bu, AngelScript'in dosya okumasina gerek kalmadan komutlari calistirir.
+    if (simManager.RaceTime % 100 == 0)
+    {
+        ExecuteCommand("load action.txt");
+    }
+
     // Yaris baslamadiysa veya bittiyse gec
     if (simManager.RaceTime < 0) return;
     
@@ -132,63 +145,10 @@ void OnRunStep(SimulationManager@ simManager)
     }
 }
 
-void OnSimulationStep(SimulationManager@ simManager, bool userCancelled)
-{
-    if (userCancelled) {
-        return;
-    }
-    
-    // Zaman bilgisi (LowInputBf.as satir 80)
-    int raceTime = simManager.RaceTime;
-    
-    // DEBUG: Her 1 saniyede bir konsola yazdir
-    if (raceTime % 1000 == 0 && raceTime > 0) {
-        print("OnSimulationStep cagrildi! Zaman: " + raceTime + "ms");
-    }
-    
-    // Pozisyon bilgisi (LowInputBf.as satir 90 - CALISIYOR!)
-    vec3 pos = simManager.Dyna.CurrentState.Location.Position;
-    
-    // LinearSpeed (hiz vektoru)
-    vec3 vel = simManager.Dyna.CurrentState.LinearSpeed;
-    
-    // Hiz hesaplama (km/h)
-    float speed = vel.Length() * 3.6;
-    
-    // DEBUG: Ilk saniyede veriyi goster
-    if (raceTime == 1000) {
-        print("Pozisyon: " + pos.ToString());
-        print("Hiz: " + speed + " km/h");
-    }
-    
-    // CSV formatinda veri hazirla
-    string csv = raceTime + "," +
-                 pos.x + "," + pos.y + "," + pos.z + "," +
-                 vel.x + "," + vel.y + "," + vel.z + "," +
-                 speed;
-    
-    // YONTEM 1: Konsol degiskenlerine yaz
-    SetVariable("rt_time", raceTime);
-    SetVariable("rt_pos_x", pos.x);
-    SetVariable("rt_pos_y", pos.y);
-    SetVariable("rt_pos_z", pos.z);
-    SetVariable("rt_vel_x", vel.x);
-    SetVariable("rt_vel_y", vel.y);
-    SetVariable("rt_vel_z", vel.z);
-    SetVariable("rt_speed", speed);
-    SetVariable("rt_data_csv", csv);
-    
-    // YONTEM 2: Panoya kopyala (her 100ms'de bir, cok sik olmasin)
-    if (raceTime % 100 == 0) {
-        IO::SetClipboard(csv);
-    }
-    
-    // DEBUG: Ilk saniyede degiskeni test et
-    if (raceTime == 1000) {
-        print("CSV degiskeni ayarlandi: " + csv);
-        print("Pano guncelleniyor! Python'dan Ctrl+V yapabilirsiniz.");
-    }
-}
+// BU FONKSIYONLAR ARTIK KULLANILMIYOR
+// void CheckForCommands() {}
+// void OnSimulationStep(SimulationManager@ simManager, bool userCancelled) {}
+
 
 PluginInfo@ GetPluginInfo()
 {
