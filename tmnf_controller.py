@@ -44,6 +44,18 @@ class TMInterfaceController:
             print(f"[HATA] Komutlar dosyaya yazilamadi: {commands} - {e}")
             return False
 
+    def clear_actions(self):
+        """Egitim durdugunda aracin son komutta takili kalmamasi icin action.txt'yi temizler."""
+        try:
+            # action.txt dosyasini acip icerigini tamamen sil.
+            with open(ACTION_FILE_PATH, "w") as f:
+                f.write("")
+            print("[KONTROLCU] Egitim durdu, action.txt temizlendi.")
+            return True
+        except Exception as e:
+            print(f"[HATA] action.txt temizlenemedi: {e}")
+            return False
+
 if __name__ == '__main__':
     # Basit test
     print("TMInterface Kontrolcusu Test Ediliyor...")

@@ -86,15 +86,16 @@ class App(tk.Tk):
             "pos": tk.StringVar(value="(0.00, 0.00, 0.00)"),
             "speed": tk.StringVar(value="0.00 km/h"),
             "vel": tk.StringVar(value="(0.00, 0.00, 0.00)"),
-            "rot_deg": tk.StringVar(value="(0.0, 0.0, 0.0)"),
-            "rot_rad": tk.StringVar(value="(0.00, 0.00, 0.00)"),
+            "rot_yaw_deg": tk.StringVar(value="0.0"), # YENI: Stabil Yaw (Derece)
+            "rot_yaw_rad": tk.StringVar(value="0.00"), # YENI: Stabil Yaw (Radyan)
             "checkpoint": tk.StringVar(value="0"),
             "lap": tk.StringVar(value="0"),
             "listener_status": tk.StringVar(value="Durduruldu"),
             "training_status": tk.StringVar(value="Bekliyor"),
             "fps": tk.StringVar(value="0.0 FPS"),
             "reward_current": tk.StringVar(value="0.00"),
-            "reward_total": tk.StringVar(value="0.00")
+            "reward_total": tk.StringVar(value="0.00"),
+            "direction": tk.StringVar(value="--")
         }
 
         # Threading ve Egitim Yonetimi
@@ -123,28 +124,38 @@ class App(tk.Tk):
         ttk.Label(main_frame, text="TMInterface Gercek Zamanli Veri", style="Header.TLabel").grid(row=0, column=0, columnspan=2, pady=(0, 20), sticky="w")
         
         # --- Veri Gorsellestirme Paneli ---
-        grid_map = { "Zaman:": ("time", 1), "Hiz:": ("speed", 2), "Pozisyon (x,y,z):": ("pos", 3), "Hiz Vektoru (x,y,z):": ("vel", 4), "Rotasyon (derece):": ("rot_deg", 5), "Rotasyon (radyan):": ("rot_rad", 6), "Checkpoint:": ("checkpoint", 7), "Tur:": ("lap", 8), }
+        grid_map = {
+            "Zaman:": ("time", 1),
+            "Hiz:": ("speed", 2),
+            "Hareket Yonu:": ("direction", 3),
+            "Pozisyon (x,y,z):": ("pos", 4),
+            "Hiz Vektoru (x,y,z):": ("vel", 5),
+            "Yaw Acisi (derece):": ("rot_yaw_deg", 6), # YENI
+            "Yaw Acisi (radyan):": ("rot_yaw_rad", 7), # YENI
+            "Checkpoint:": ("checkpoint", 8),
+            "Tur:": ("lap", 9),
+        }
         for i, (label_text, (var_key, row)) in enumerate(grid_map.items()):
             ttk.Label(main_frame, text=label_text).grid(row=row, column=0, sticky="w", padx=(0, 10), pady=2)
             ttk.Label(main_frame, textvariable=self.data_vars[var_key], style="Value.TLabel").grid(row=row, column=1, sticky="w")
         
         # Odul gostergeleri
-        ttk.Label(main_frame, text="Anlik Odul/Ceza:").grid(row=9, column=0, sticky="w", padx=(0, 10), pady=(10, 2))
-        ttk.Label(main_frame, textvariable=self.data_vars["reward_current"], style="Value.TLabel").grid(row=9, column=1, sticky="w")
-        ttk.Label(main_frame, text="Bolum Toplam Odulu:").grid(row=10, column=0, sticky="w", padx=(0, 10), pady=2)
-        ttk.Label(main_frame, textvariable=self.data_vars["reward_total"], style="Value.TLabel").grid(row=10, column=1, sticky="w")
+        ttk.Label(main_frame, text="Anlik Odul/Ceza:").grid(row=10, column=0, sticky="w", padx=(0, 10), pady=(10, 2))
+        ttk.Label(main_frame, textvariable=self.data_vars["reward_current"], style="Value.TLabel").grid(row=10, column=1, sticky="w")
+        ttk.Label(main_frame, text="Bolum Toplam Odulu:").grid(row=11, column=0, sticky="w", padx=(0, 10), pady=2)
+        ttk.Label(main_frame, textvariable=self.data_vars["reward_total"], style="Value.TLabel").grid(row=11, column=1, sticky="w")
 
         # Ayirici
-        ttk.Separator(main_frame, orient='horizontal').grid(row=11, column=0, columnspan=2, sticky='ew', pady=20)
+        ttk.Separator(main_frame, orient='horizontal').grid(row=12, column=0, columnspan=2, sticky='ew', pady=20)
         
         # --- Egitim Kontrol Paneli ---
-        ttk.Label(main_frame, text="RL Egitim Kontrolu", style="Header.TLabel").grid(row=12, column=0, columnspan=2, pady=(0, 15), sticky="w")
+        ttk.Label(main_frame, text="RL Egitim Kontrolu", style="Header.TLabel").grid(row=13, column=0, columnspan=2, pady=(0, 15), sticky="w")
         
         self.start_training_button = ttk.Button(main_frame, text="Egitimi Baslat", command=self.start_training, style="Success.TButton", width=20)
-        self.start_training_button.grid(row=13, column=0, padx=5, pady=5)
+        self.start_training_button.grid(row=14, column=0, padx=5, pady=5)
         
         self.stop_training_button = ttk.Button(main_frame, text="Egitimi Durdur", command=self.stop_training, style="Danger.TButton", state="disabled", width=20)
-        self.stop_training_button.grid(row=13, column=1, padx=5, pady=5)
+        self.stop_training_button.grid(row=14, column=1, padx=5, pady=5)
         
         # Durum Cubugu
         status_bar = ttk.Frame(self, padding="5", style="TFrame")
@@ -290,7 +301,7 @@ class App(tk.Tk):
             self.listener_status_label.config(style="Status.Stopped.TLabel")
 
     def update_ui(self):
-        # ... (Bu fonksiyon kucuk bir degisiklik disinda ayni kaliyor)
+        """Arayuzu guncelleyen ana dongu."""
         try:
             while not self.data_queue.empty():
                 car_state = self.data_queue.get()
@@ -301,18 +312,22 @@ class App(tk.Tk):
                 self.data_vars["pos"].set(f"({car_state.pos_x:.2f}, {car_state.pos_y:.2f}, {car_state.pos_z:.2f})")
                 self.data_vars["speed"].set(f"{car_state.speed:.2f} km/h")
                 self.data_vars["vel"].set(f"({car_state.vel_x:.2f}, {car_state.vel_y:.2f}, {car_state.vel_z:.2f})")
-                yaw_deg, pitch_deg, roll_deg = (car_state.yaw * 180 / math.pi, car_state.pitch * 180 / math.pi, car_state.roll * 180 / math.pi)
-                self.data_vars["rot_deg"].set(f"({yaw_deg:.1f}, {pitch_deg:.1f}, {roll_deg:.1f})")
-                self.data_vars["rot_rad"].set(f"({car_state.yaw:.2f}, {car_state.pitch:.2f}, {car_state.roll:.2f})")
+                
+                # YENI: Stabil yaw degerlerini guncelle
+                yaw_deg = car_state.yaw * 180 / math.pi
+                self.data_vars["rot_yaw_deg"].set(f"{yaw_deg:.1f}")
+                self.data_vars["rot_yaw_rad"].set(f"{car_state.yaw:.2f}")
+
                 self.data_vars["checkpoint"].set(str(car_state.checkpoint))
                 self.data_vars["lap"].set(str(car_state.lap))
+                self.data_vars["direction"].set(car_state.direction)
 
             if self.listener_running:
                 elapsed = time.time() - self.start_time
                 fps = self.frame_count / elapsed if elapsed > 0 else 0
                 self.data_vars["fps"].set(f"{fps:.1f} FPS")
 
-            # Egitim verilerini guncelle
+            # Egitim calisiyorsa ek bilgileri guncelle
             if self.training_running and self.env:
                 self.data_vars["reward_current"].set(f"{self.env.last_reward:.2f}")
                 self.data_vars["reward_total"].set(f"{self.env.total_reward:.2f}")
@@ -320,7 +335,7 @@ class App(tk.Tk):
         except Exception as e:
             print(f"UI guncelleme hatasi: {e}")
         
-        self.after(100, self.update_ui)
+        self.after(50, self.update_ui)
 
     def on_closing(self):
         # Tum thread'leri durdur

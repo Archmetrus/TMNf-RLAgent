@@ -22,6 +22,7 @@ class TMNFEnv(gym.Env):
         # Odul takibi icin
         self.last_reward = 0.0
         self.total_reward = 0.0
+        self.car_direction = "Bilinmiyor" # Arac yonunu saklamak icin yeni degisken
 
         # --- AKSIYON ALANI (ACTION SPACE) - GELISTIRILDI ---
         # Ajan artik ayni anda iki karar verecek:
@@ -39,8 +40,8 @@ class TMNFEnv(gym.Env):
         }
         
         # --- Gozlem Alani (Observation Space) ---
-        # [hiz, pos_x, pos_y, pos_z, yaw, pitch, roll]
-        observation_shape = 7 
+        # [hiz, pos_x, pos_y, pos_z, yaw] - pitch ve roll kaldirildi.
+        observation_shape = 5 
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(observation_shape,), dtype=np.float32)
 
         # --- Kontrolcu ---
@@ -65,8 +66,6 @@ class TMNFEnv(gym.Env):
                 self.current_state.pos_y,
                 self.current_state.pos_z,
                 self.current_state.yaw,
-                self.current_state.pitch,
-                self.current_state.roll,
             ], dtype=np.float32)
             return observation
 
@@ -116,29 +115,27 @@ class TMNFEnv(gym.Env):
         # 2. Yeni durumu (gozlem) oyundan al
         observation = self._get_observation()
 
-        # 3. ODUL HESAPLAMA (GELISTIRILDI - DAHA AGRESİF)
-        # Odul, artik ileri yondeki hizin karesiyle orantili.
-        # Geri gitmenin cezasi da artik ussel olarak daha buyuk.
+        # 3. ODUL HESAPLAMA (YENIDEN AKTIF)
+        # Ajan, sadece ileri yondeki hizina gore odullendirilir.
         reward = 0
         if self.current_state and self.current_state.valid:
-            # Arabanin yonunu yaw acisindan hesapla (2D vektor)
-            yaw = self.current_state.yaw
-            forward_vector = np.array([np.cos(yaw), np.sin(yaw)])
+            # Ileri yon hizi artik dogrudan CarState nesnesinden okunuyor.
+            # Hesaplama tekrari ve tutarsizlik onlendi.
+            forward_speed = self.current_state.forward_speed
             
-            # Arabanin hiz vektorunu al (2D)
-            velocity_vector = np.array([self.current_state.vel_x, self.current_state.vel_y])
-            
-            # Ileri yondeki hizi bulmak icin iki vektorun nokta carpimini (dot product) kullan.
-            forward_speed = np.dot(velocity_vector, forward_vector)
-            
-            # YENI ODUL MANTIGI:
-            # Ileri gitmek de, geri gitmek de ussel olarak karsilik bulur.
-            scaling_factor = 5.0 # Katsayiyi dusurerek odulu artiriyoruz.
+            # YON BILGISINI GUNCELLE
+            self.car_direction = self.current_state.direction
+
+            # ODUL MANTIGI:
+            # Ileri hareket ussel olarak odullendirilir,
+            # Geri hareket ise cok daha siddetli bir sekilde ussel olarak cezalandirilir.
+            scaling_factor = 5.0
             if forward_speed > 0:
-                # Odul, ileri hizin karesiyle artar.
+                # Odul, ileri hizin kupuyle artar.
                 reward = (forward_speed / scaling_factor) ** 3
             else:
-                # Ceza, geri hizin karesiyle artar (negatif olarak).
+                # Ceza, geri hizin 6. kuvvetiyle artar (negatif olarak).
+                # Bu, en ufak bir geri hareketi bile cok agir cezalandirir.
                 reward = -((forward_speed / scaling_factor) ** 6)
 
         # Takip icin odul degerlerini sakla
@@ -187,10 +184,10 @@ class TMNFEnv(gym.Env):
         pass
 
     def close(self):
-        """
-        Kaynaklari temizler.
-        """
-        print("[ORTAM] TMNF Ortami kapatildi.")
+        """Ortam kapatildiginda cagrilir ve aracin komutlarini temizler."""
+        print("[ORTAM] TMNF Ortami kapatiliyor.")
+        if self.controller:
+            self.controller.clear_actions()
 
 if __name__ == '__main__':
     # Ortamin Gymnasium standartlarina uygunlugunu test etme

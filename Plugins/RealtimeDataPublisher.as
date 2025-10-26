@@ -74,27 +74,20 @@ void OnRunStep(SimulationManager@ simManager)
     // Hiz hesaplama (km/h)
     float speed = vel.Length() * 3.6;
     
-    // Rotasyon bilgileri (quaternion)
-    quat rotation = simManager.Dyna.CurrentState.Quat;
+    // YENI ve KESIN YONTEM: iso4 -> mat3 -> GetYawPitchRoll()
+    // iso4, hem pozisyon (translation) hem de rotasyon (mat3) bilgisi icerir.
+    iso4 location = simManager.Dyna.CurrentState.Location;
     
-    // Quaternion'dan Euler acilarina cevirme
-    // Yaw (Z axis)
-    float yaw = Math::Atan2(2.0 * (rotation.w * rotation.z + rotation.x * rotation.y),
-                            1.0 - 2.0 * (rotation.y * rotation.y + rotation.z * rotation.z));
-    
-    // Pitch (Y axis)
-    float sinp = 2.0 * (rotation.w * rotation.y - rotation.z * rotation.x);
-    float pitch;
-    if (Math::Abs(sinp) >= 1.0) {
-        pitch = (sinp > 0 ? 1.0 : -1.0) * PI / 2.0;  // Math::Sign yerine
-    } else {
-        pitch = Math::Asin(sinp);
-    }
-    
-    // Roll (X axis)
-    float roll = Math::Atan2(2.0 * (rotation.w * rotation.x + rotation.y * rotation.z),
-                             1.0 - 2.0 * (rotation.x * rotation.x + rotation.y * rotation.y));
-    
+    // location.Rotation, 3x3'luk bir rotasyon matrisidir (mat3).
+    mat3 rotationMatrix = location.Rotation;
+
+    // Cikti degiskenlerini tanimla
+    float yaw, pitch, roll;
+
+    // Matris'ten dogrudan yaw, pitch, roll degerlerini (radyan) al.
+    // Bu, TMInterface'in kendi, stabil cevirme fonksiyonudur.
+    rotationMatrix.GetYawPitchRoll(yaw, pitch, roll);
+
     // Checkpoint ve lap bilgisi
     int currentCP = simManager.PlayerInfo.CurCheckpointCount;
     int currentLap = simManager.PlayerInfo.CurLap;
@@ -104,7 +97,7 @@ void OnRunStep(SimulationManager@ simManager)
                  pos.x + "," + pos.y + "," + pos.z + "," +
                  vel.x + "," + vel.y + "," + vel.z + "," +
                  speed + "," +
-                 yaw + "," + pitch + "," + roll + "," +
+                 yaw + "," + // Sadece stabil yaw gonderiliyor
                  currentCP + "," + currentLap;
     
     // Konsol degiskenlerine yaz
@@ -117,8 +110,8 @@ void OnRunStep(SimulationManager@ simManager)
     SetVariable("rt_vel_z", vel.z);
     SetVariable("rt_speed", speed);
     SetVariable("rt_yaw", yaw);
-    SetVariable("rt_pitch", pitch);
-    SetVariable("rt_roll", roll);
+    SetVariable("rt_pitch", pitch); // Debug icin hala yazdiriliyor ama CSV'de yok
+    SetVariable("rt_roll", roll);  // Debug icin hala yazdiriliyor ama CSV'de yok
     SetVariable("rt_checkpoint", currentCP);
     SetVariable("rt_lap", currentLap);
     SetVariable("rt_data_csv", csv);
@@ -133,7 +126,7 @@ void OnRunStep(SimulationManager@ simManager)
         print("OnRunStep CALISIYOR!");
         print("Pozisyon: " + pos.ToString());
         print("Hiz: " + speed + " km/h");
-        print("Rotasyon: Yaw=" + yaw + " Pitch=" + pitch + " Roll=" + roll);
+        print("KESIN YAW (Radyan): " + yaw);
         print("Checkpoint: " + currentCP + " | Lap: " + currentLap);
         print("CSV: " + csv);
         print("Pano guncelleniyor!");
