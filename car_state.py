@@ -23,16 +23,17 @@ class CarState:
         try:
             parts = csv_line.strip().split(',')
             
-            # YENI BASITLESTIRILMIS FORMAT: 11 parca (time, pos(3), vel(3), speed, yaw, cp, lap)
-            if len(parts) >= 11:
+            # YENI FORMAT: 14 parca (time, pos(3), vel(3), speed, yaw, cp, lap, target_cp(3))
+            if len(parts) >= 14:
                 self.time = int(float(parts[0]))
                 self.pos_x, self.pos_y, self.pos_z = [float(p) for p in parts[1:4]]
                 self.vel_x, self.vel_y, self.vel_z = [float(p) for p in parts[4:7]]
                 self.speed = float(parts[7])
-                # YENI: Sadece stabil yaw'i oku
                 self.yaw = float(parts[8])
                 self.checkpoint = int(float(parts[9]))
                 self.lap = int(float(parts[10]))
+                # YENI: Hedef checkpoint koordinatlarini oku
+                self.target_cp_x, self.target_cp_y, self.target_cp_z = [float(p) for p in parts[11:14]]
                 self.valid = True
                 
         except (ValueError, IndexError):
@@ -84,7 +85,8 @@ class CarState:
             'velocity': {'x': self.vel_x, 'y': self.vel_y, 'z': self.vel_z},
             'speed': self.speed,
             'rotation_yaw': self.yaw,
-            'forward_speed': self.forward_speed, # YENI
+            'forward_speed': self.forward_speed,
             'checkpoint': self.checkpoint,
-            'lap': self.lap
+            'lap': self.lap,
+            'target_checkpoint': {'x': self.target_cp_x, 'y': self.target_cp_y, 'z': self.target_cp_z}
         }

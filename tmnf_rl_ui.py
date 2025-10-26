@@ -98,6 +98,7 @@ class App(tk.Tk):
             "rot_yaw_rad": tk.StringVar(value="0.00"), # YENI: Stabil Yaw (Radyan)
             "checkpoint": tk.StringVar(value="0"),
             "lap": tk.StringVar(value="0"),
+            "target_cp_pos": tk.StringVar(value="(0, 0, 0)"), # YENI: Hedef CP Pozisyonu
             "listener_status": tk.StringVar(value="Durduruldu"),
             "training_status": tk.StringVar(value="Bekliyor"),
             "fps": tk.StringVar(value="0.0 FPS"),
@@ -144,28 +145,29 @@ class App(tk.Tk):
             "Yaw Acisi (radyan):": ("rot_yaw_rad", 7), # YENI
             "Checkpoint:": ("checkpoint", 8),
             "Tur:": ("lap", 9),
+            "Sonraki Hedef (X,Y,Z):": ("target_cp_pos", 10), # YENI
         }
         for i, (label_text, (var_key, row)) in enumerate(grid_map.items()):
             ttk.Label(main_frame, text=label_text).grid(row=row, column=0, sticky="w", padx=(0, 10), pady=2)
             ttk.Label(main_frame, textvariable=self.data_vars[var_key], style="Value.TLabel").grid(row=row, column=1, sticky="w")
         
         # Odul gostergeleri
-        ttk.Label(main_frame, text="Anlik Odul/Ceza:").grid(row=10, column=0, sticky="w", padx=(0, 10), pady=(10, 2))
-        ttk.Label(main_frame, textvariable=self.data_vars["reward_current"], style="Value.TLabel").grid(row=10, column=1, sticky="w")
-        ttk.Label(main_frame, text="Bolum Toplam Odulu:").grid(row=11, column=0, sticky="w", padx=(0, 10), pady=2)
-        ttk.Label(main_frame, textvariable=self.data_vars["reward_total"], style="Value.TLabel").grid(row=11, column=1, sticky="w")
+        ttk.Label(main_frame, text="Anlik Odul/Ceza:").grid(row=11, column=0, sticky="w", padx=(0, 10), pady=(10, 2))
+        ttk.Label(main_frame, textvariable=self.data_vars["reward_current"], style="Value.TLabel").grid(row=11, column=1, sticky="w")
+        ttk.Label(main_frame, text="Bolum Toplam Odulu:").grid(row=12, column=0, sticky="w", padx=(0, 10), pady=2)
+        ttk.Label(main_frame, textvariable=self.data_vars["reward_total"], style="Value.TLabel").grid(row=12, column=1, sticky="w")
 
         # Ayirici
-        ttk.Separator(main_frame, orient='horizontal').grid(row=12, column=0, columnspan=2, sticky='ew', pady=20)
+        ttk.Separator(main_frame, orient='horizontal').grid(row=13, column=0, columnspan=2, sticky='ew', pady=20)
         
         # --- Egitim Kontrol Paneli ---
-        ttk.Label(main_frame, text="RL Egitim Kontrolu", style="Header.TLabel").grid(row=13, column=0, columnspan=2, pady=(0, 15), sticky="w")
+        ttk.Label(main_frame, text="RL Egitim Kontrolu", style="Header.TLabel").grid(row=14, column=0, columnspan=2, pady=(0, 15), sticky="w")
         
         self.start_training_button = ttk.Button(main_frame, text="Egitimi Baslat", command=self.start_training, style="Success.TButton", width=20)
-        self.start_training_button.grid(row=14, column=0, padx=5, pady=5)
+        self.start_training_button.grid(row=15, column=0, padx=5, pady=5)
         
         self.stop_training_button = ttk.Button(main_frame, text="Egitimi Durdur", command=self.stop_training, style="Danger.TButton", state="disabled", width=20)
-        self.stop_training_button.grid(row=14, column=1, padx=5, pady=5)
+        self.stop_training_button.grid(row=15, column=1, padx=5, pady=5)
         
         # Durum Cubugu
         status_bar = ttk.Frame(self, padding="5", style="TFrame")
@@ -351,6 +353,8 @@ class App(tk.Tk):
                 self.data_vars["checkpoint"].set(str(car_state.checkpoint))
                 self.data_vars["lap"].set(str(car_state.lap))
                 self.data_vars["direction"].set(car_state.direction)
+                # YENI: Hedef checkpoint pozisyonunu guncelle
+                self.data_vars["target_cp_pos"].set(f"({int(car_state.target_cp_x)}, {int(car_state.target_cp_y)}, {int(car_state.target_cp_z)})")
 
             if self.listener_running:
                 elapsed = time.time() - self.start_time
