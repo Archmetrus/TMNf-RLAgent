@@ -120,23 +120,47 @@ class TMNFEnv(gym.Env):
         reward = 0
         if self.current_state and self.current_state.valid:
             # Ileri yon hizi artik dogrudan CarState nesnesinden okunuyor.
-            # Hesaplama tekrari ve tutarsizlik onlendi.
             forward_speed = self.current_state.forward_speed
             
             # YON BILGISINI GUNCELLE
             self.car_direction = self.current_state.direction
 
-            # ODUL MANTIGI:
+            # --- ODUL MANTIGI (GELISTIRILDI) ---
+
+            # 1. Ana Odul/Ceza: Ileri gitmeye dayali.
             # Ileri hareket ussel olarak odullendirilir,
             # Geri hareket ise cok daha siddetli bir sekilde ussel olarak cezalandirilir.
+            reward_forward = 0
             scaling_factor = 5.0
             if forward_speed > 0:
-                # Odul, ileri hizin kupuyle artar.
-                reward = (forward_speed / scaling_factor) ** 3
+                reward_forward = (forward_speed / scaling_factor) ** 3
             else:
-                # Ceza, geri hizin 6. kuvvetiyle artar (negatif olarak).
-                # Bu, en ufak bir geri hareketi bile cok agir cezalandirir.
-                reward = -((forward_speed / scaling_factor) ** 6)
+                reward_forward = -((forward_speed / scaling_factor) ** 6)
+
+            # 2. YENI Ceza: Zaman Cezasi
+            # Ajanin hedefe hizli ulasmasini tesvik etmek icin her adimda kucuk bir ceza.
+            time_penalty = -0.1
+
+            # 3. YENI Ceza: Savrulma (Tutarlilik) Cezasi
+            # Arabanin yonu ile hareket yonu arasindaki aciyi cezalandirir.
+            consistency_penalty = 0
+            # Sadece arac hareket ediyorsa hesapla (sifira bolme hatasini onle)
+            horizontal_speed = np.linalg.norm([self.current_state.vel_x, self.current_state.vel_z])
+            if horizontal_speed > 1.0:
+                # cos_angle = dot_product / (mag1 * mag2)
+                # forward_vector'in buyuklugu 1'dir.
+                cos_angle = forward_speed / horizontal_speed
+                # Aciyi [-1, 1] araliginda tut
+                cos_angle = np.clip(cos_angle, -1.0, 1.0)
+                # Aci radyan cinsinden (0: ayni yon, pi: ters yon)
+                angle_rad = np.arccos(cos_angle)
+                # Aci ne kadar buyukse, ceza o kadar artar (0'dan 1'e).
+                # Aciyi pi'ye bolerek normalize ediyoruz ve karesini alarak kucuk sapmalari
+                # daha az, buyuk sapmalari daha cok cezalandiriyoruz.
+                consistency_penalty = - (angle_rad / np.pi) ** 2
+            
+            # Tum odul ve cezalari topla
+            reward = reward_forward + time_penalty + consistency_penalty
 
         # Takip icin odul degerlerini sakla
         self.last_reward = reward

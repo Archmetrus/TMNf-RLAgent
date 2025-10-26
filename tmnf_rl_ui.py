@@ -34,11 +34,19 @@ except ImportError as e:
 
 class StopTrainingCallback(BaseCallback):
     """
-    Egitimi disaridan durdurmak icin kullanilan ozel callback.
+    Egitimi disaridan durdurmak ve UI'yi guncellemek icin kullanilan ozel callback.
     """
     def __init__(self, app, verbose=0):
         super(StopTrainingCallback, self).__init__(verbose)
         self.app = app
+
+    def _on_rollout_end(self) -> None:
+        """
+        Her n_steps'de (bizim icin 32) bir cagrilir.
+        Adim sayisini guncellemek icin en guvenilir yer burasidir.
+        self.num_timesteps, o anki toplam adim sayisini tutar.
+        """
+        self.app.current_step_count = self.num_timesteps
 
     def _on_step(self) -> bool:
         # App icindeki bayrak (flag) kontrol edilir.
@@ -51,7 +59,7 @@ class App(tk.Tk):
         super().__init__()
 
         self.title("TMNF RL Egitim Arayuzu")
-        self.geometry("650x550")
+        self.geometry("750x650") # Pencere boyutu genisletildi
         self.configure(bg="#2E2E2E")
 
         # --- Stil Ayarlari ---
@@ -95,13 +103,15 @@ class App(tk.Tk):
             "fps": tk.StringVar(value="0.0 FPS"),
             "reward_current": tk.StringVar(value="0.00"),
             "reward_total": tk.StringVar(value="0.00"),
-            "direction": tk.StringVar(value="--")
+            "direction": tk.StringVar(value="--"),
+            "step_count": tk.StringVar(value="Adim: 0") # YENI: Adim sayaci
         }
 
         # Threading ve Egitim Yonetimi
         self.listener_running = False
         self.training_running = False
         self.training_should_stop = False
+        self.current_step_count = 0 # YENI: Adim sayisini saklamak icin
         self.data_queue = queue.Queue()
         self.listener_thread = None
         self.training_thread = None
@@ -165,6 +175,10 @@ class App(tk.Tk):
         
         self.training_status_label = ttk.Label(status_bar, textvariable=self.data_vars["training_status"])
         self.training_status_label.pack(side="left", padx=20)
+        
+        # YENI: Adim sayaci etiketi
+        self.step_count_label = ttk.Label(status_bar, textvariable=self.data_vars["step_count"], style="Status.Idle.TLabel")
+        self.step_count_label.pack(side="left", padx=20)
 
         self.fps_label = ttk.Label(status_bar, textvariable=self.data_vars["fps"])
         self.fps_label.pack(side="right")
@@ -192,7 +206,18 @@ class App(tk.Tk):
             if not os.path.exists(models_dir): os.makedirs(models_dir)
             if not os.path.exists(logdir): os.makedirs(logdir)
                 
-            self.model = PPO("MlpPolicy", self.env, verbose=1, tensorboard_log=logdir)
+            # YENI: Ince ayar yapilmis hiperparametreler
+            # learning_rate: Ajanin ogrenme adimlarinin buyuklugu. Daha dusuk, daha stabil.
+            # gamma: Gelecekteki odullere verilen onem. Daha yuksek, daha uzun vadeli planlama.
+            self.model = PPO(
+                "MlpPolicy", 
+                self.env, 
+                verbose=1, 
+                tensorboard_log=logdir,
+                learning_rate=0.0001,
+                gamma=0.995,
+                n_steps=32 # YENI: Strateji guncelleme sikligi (daha sık = daha hizli ogrenme)
+            )
             
             self.set_training_status("Egitim basladi...", "running")
             
@@ -226,9 +251,11 @@ class App(tk.Tk):
             if not messagebox.askyesno("Egitimi Baslat", "Egitimi baslatmak uzeresiniz.\n\nTMInterface'in acik ve bir haritanin yuklu oldugundan emin olun.\n\nDevam edilsin mi?"):
                 return
             
-            # Odul gostergelerini sifirla
+            # Odul gostergelerini ve adim sayacini sifirla
             self.data_vars["reward_current"].set("0.00")
             self.data_vars["reward_total"].set("0.00")
+            self.data_vars["step_count"].set("Adim: 0")
+            self.current_step_count = 0
 
             self.training_running = True
             self.training_should_stop = False
@@ -254,10 +281,13 @@ class App(tk.Tk):
         self.data_vars["training_status"].set(message)
         if status_type == "running":
             self.training_status_label.config(style="Status.Running.TLabel")
+            self.step_count_label.config(style="Status.Running.TLabel") # Adim sayaci rengini de guncelle
         elif status_type == "stopped":
             self.training_status_label.config(style="Status.Stopped.TLabel")
+            self.step_count_label.config(style="Status.Stopped.TLabel") # Adim sayaci rengini de guncelle
         else: # idle
             self.training_status_label.config(style="Status.Idle.TLabel")
+            self.step_count_label.config(style="Status.Idle.TLabel") # Adim sayaci rengini de guncelle
 
 
     # --- Pano Dinleyici Fonksiyonlari ---
@@ -331,6 +361,7 @@ class App(tk.Tk):
             if self.training_running and self.env:
                 self.data_vars["reward_current"].set(f"{self.env.last_reward:.2f}")
                 self.data_vars["reward_total"].set(f"{self.env.total_reward:.2f}")
+                self.data_vars["step_count"].set(f"Adim: {self.current_step_count}")
 
         except Exception as e:
             print(f"UI guncelleme hatasi: {e}")

@@ -57,3 +57,7 @@ States/*.bin
 config.txt
 builtin.txt
 
+# RL Agent Artifacts
+/logs/
+/models/
+
