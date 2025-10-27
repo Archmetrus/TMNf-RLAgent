@@ -23,6 +23,9 @@ class TMNFEnv(gym.Env):
         self.last_reward = 0.0
         self.total_reward = 0.0
         self.car_direction = "Bilinmiyor" # Arac yonunu saklamak icin yeni degisken
+        # YENI: Odul hesaplamasi icin onceki adimin bilgilerini sakla
+        self.last_distance_to_target = float('inf')
+        self.last_checkpoint_count = 0
 
         # --- AKSIYON ALANI (ACTION SPACE) - GELISTIRILDI ---
         # Ajan artik ayni anda iki karar verecek:
@@ -39,9 +42,11 @@ class TMNFEnv(gym.Env):
             4: "steer 65536"    # Tam Sag
         }
         
-        # --- Gozlem Alani (Observation Space) ---
-        # [hiz, pos_x, pos_y, pos_z, yaw] - pitch ve roll kaldirildi.
-        observation_shape = 5 
+        # --- Gozlem Alani (Observation Space) - GELISTIRILDI ---
+        # [hiz, yaw, target_relative_x, target_relative_z]
+        # Pozisyon bilgisi yerine hedefe olan goreceli pozisyonu veriyoruz.
+        # Bu, ajan'in farkli haritalarda daha iyi genelleme yapmasini saglar.
+        observation_shape = 4 
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(observation_shape,), dtype=np.float32)
 
         # --- Kontrolcu ---
@@ -53,23 +58,37 @@ class TMNFEnv(gym.Env):
 
     def _get_observation(self):
         """
-        Gozlem verisini dogrudan arayuzden (app) alir.
+        Gozlem verisini olusturur ve hedefin goreceli konumunu hesaplar.
         """
-        # Arayuzden en son gecerli araba durumunu al
         self.current_state = self.app.latest_car_state
 
-        # Eger veri gecerliyse, gozlem vektorunu olustur ve dondur
         if self.current_state and self.current_state.valid:
+            # --- YENI: Hedefin Goreceli Konumunu Hesaplama ---
+            car_pos = np.array([self.current_state.pos_x, self.current_state.pos_z])
+            car_yaw = self.current_state.yaw
+            target_pos = np.array([self.current_state.target_cp_x, self.current_state.target_cp_z])
+
+            # Dunya koordinatlarinda aractan hedefe olan vektor
+            world_vec = target_pos - car_pos
+            
+            # Bu vektoru, aracin kendi bakis acisina gore dondur
+            # Donus matrisi: [[cos, sin], [-sin, cos]]
+            cos_yaw = np.cos(car_yaw)
+            sin_yaw = np.sin(car_yaw)
+            
+            # local_z: Hedef onumde/arkamda ne kadar mesafede
+            # local_x: Hedef sagimda/solumda ne kadar mesafede
+            target_relative_z = world_vec[1] * cos_yaw - world_vec[0] * sin_yaw
+            target_relative_x = world_vec[1] * sin_yaw + world_vec[0] * cos_yaw
+            
             observation = np.array([
-                self.current_state.speed,
-                self.current_state.pos_x,
-                self.current_state.pos_y,
-                self.current_state.pos_z,
+                self.current_state.speed / 100.0, # Hizi normalize et (yaklasik 0-10 arasi)
                 self.current_state.yaw,
+                target_relative_x / 100.0, # Mesafeyi normalize et
+                target_relative_z / 100.0  # Mesafeyi normalize et
             ], dtype=np.float32)
             return observation
 
-        # Eger arayuzden henuz gecerli veri gelmediyse, uyari ver ve sifir dondur
         print("[UYARI] Arayuzden gecerli gozlem verisi alinamadi.")
         return np.zeros(self.observation_space.shape, dtype=np.float32)
 
@@ -159,8 +178,32 @@ class TMNFEnv(gym.Env):
                 # daha az, buyuk sapmalari daha cok cezalandiriyoruz.
                 consistency_penalty = - (angle_rad / np.pi) ** 2
             
+            # --- YENI ODULLER ---
+
+            # 4. YENI Odul: Checkpoint Bonusu
+            checkpoint_bonus = 0
+            current_cp_count = self.current_state.checkpoint
+            if current_cp_count > self.last_checkpoint_count:
+                checkpoint_bonus = 500.0
+                print(f"[ODUL] Checkpoint gecildi! +{checkpoint_bonus} bonus!")
+            self.last_checkpoint_count = current_cp_count
+
+            # 5. YENI Odul: Hedefe Yaklasma Odulu
+            distance_reward = 0
+            current_pos = np.array([self.current_state.pos_x, self.current_state.pos_y, self.current_state.pos_z])
+            target_pos = np.array([self.current_state.target_cp_x, self.current_state.target_cp_y, self.current_state.target_cp_z])
+            current_distance = np.linalg.norm(current_pos - target_pos)
+            
+            # Ilk adimda self.last_distance_to_target'i ayarla
+            if self.last_distance_to_target == float('inf'):
+                self.last_distance_to_target = current_distance
+            
+            distance_diff = self.last_distance_to_target - current_distance
+            distance_reward = distance_diff * 0.1 # Yaklasilan her metreyi odullendir
+            self.last_distance_to_target = current_distance
+
             # Tum odul ve cezalari topla
-            reward = reward_forward + time_penalty + consistency_penalty
+            reward = reward_forward + time_penalty + consistency_penalty + checkpoint_bonus + distance_reward
 
         # Takip icin odul degerlerini sakla
         self.last_reward = reward
@@ -183,6 +226,9 @@ class TMNFEnv(gym.Env):
         # Toplam odulu sifirla
         self.total_reward = 0.0
         self.last_reward = 0.0
+        # YENI: Reset'te bu degerleri de sifirla
+        self.last_distance_to_target = float('inf')
+        self.last_checkpoint_count = 0
 
         # Oyunu yeniden baslat (dogru komut 'press delete')
         print("[ORTAM] Yaris yeniden baslatiliyor...")
@@ -197,6 +243,10 @@ class TMNFEnv(gym.Env):
 
         # Ilk gozlemi al ve dondur
         observation = self._get_observation()
+        # Sifirlamadan sonra ilk gozlemde CP sayisini guncelle
+        if self.current_state and self.current_state.valid:
+            self.last_checkpoint_count = self.current_state.checkpoint
+
         info = {}
 
         return observation, info

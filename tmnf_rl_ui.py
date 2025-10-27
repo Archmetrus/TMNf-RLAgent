@@ -59,7 +59,7 @@ class App(tk.Tk):
         super().__init__()
 
         self.title("TMNF RL Egitim Arayuzu")
-        self.geometry("750x650") # Pencere boyutu genisletildi
+        self.geometry("550x850") # Pencere boyutu genisletildi
         self.configure(bg="#2E2E2E")
 
         # --- Stil Ayarlari ---
