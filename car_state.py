@@ -12,32 +12,40 @@ class CarState:
     Panodan gelen CSV verisini yapilandirilmis bir Python nesnesine donusturur.
     Ayrica, bu veri uzerinden aracla ilgili ek hesaplamalar (orn. hareket yonu) yapar.
     """
-    def __init__(self, csv_line):
+    def __init__(self, data_string: str):
         self.valid = False
         self.direction = "--" # Hareket yonu icin varsayilan deger
         self.forward_speed = 0.0 # YENI: Ileri yon hizi icin
 
-        if not csv_line:
-            return
-
         try:
-            parts = csv_line.strip().split(',')
+            parts = data_string.strip().split(',')
             
-            # YENI FORMAT: 14 parca (time, pos(3), vel(3), speed, yaw, cp, lap, target_cp(3))
-            if len(parts) >= 14:
-                self.time = int(float(parts[0]))
-                self.pos_x, self.pos_y, self.pos_z = [float(p) for p in parts[1:4]]
-                self.vel_x, self.vel_y, self.vel_z = [float(p) for p in parts[4:7]]
-                self.speed = float(parts[7])
-                self.yaw = float(parts[8])
-                self.checkpoint = int(float(parts[9]))
-                self.lap = int(float(parts[10]))
-                # YENI: Hedef checkpoint koordinatlarini oku
-                self.target_cp_x, self.target_cp_y, self.target_cp_z = [float(p) for p in parts[11:14]]
-                self.valid = True
-                
-        except (ValueError, IndexError):
+            # YENI: Beklenen parca sayisini 15'e cikar
+            if len(parts) != 15:
+                # print(f"[UYARI] Gecersiz veri parcasi sayisi: {len(parts)}, beklenen 15.")
+                return
+
+            self.time = int(parts[0])
+            self.speed = float(parts[1])
+            self.pos_x, self.pos_y, self.pos_z = [float(p) for p in parts[2:5]]
+            self.vel_x, self.vel_y, self.vel_z = [float(p) for p in parts[5:8]]
+            self.yaw = float(parts[8])
+            self.checkpoint = int(parts[9])
+            self.lap = int(parts[10])
+            # YENI: Hedef checkpoint koordinatlarini oku
+            self.target_cp_x = float(parts[11])
+            self.target_cp_y = float(parts[12])
+            self.target_cp_z = float(parts[13])
+            # YENI: Duvara temas verisini al
+            self.has_lateral_contact = bool(int(parts[14]))
+
+            # Eger veri gecerliyse, hareket yonunu hesapla
+            self.valid = True
+            if self.valid:
+                self._calculate_direction()
+        except (ValueError, IndexError) as e:
             self.valid = False
+            pass
         
         # Eger veri gecerliyse, hareket yonunu hesapla
         if self.valid:
@@ -77,16 +85,18 @@ class CarState:
     def to_dict(self):
         """Veriyi sozluk formatina donusturur."""
         if not self.valid:
-            return None
+            return {}
         
         return {
             'time': self.time,
+            'speed': self.speed,
             'position': {'x': self.pos_x, 'y': self.pos_y, 'z': self.pos_z},
             'velocity': {'x': self.vel_x, 'y': self.vel_y, 'z': self.vel_z},
-            'speed': self.speed,
             'rotation_yaw': self.yaw,
             'forward_speed': self.forward_speed,
+            'direction': self.direction,
             'checkpoint': self.checkpoint,
             'lap': self.lap,
-            'target_checkpoint': {'x': self.target_cp_x, 'y': self.target_cp_y, 'z': self.target_cp_z}
+            'target_checkpoint': {'x': self.target_cp_x, 'y': self.target_cp_y, 'z': self.target_cp_z},
+            'has_lateral_contact': self.has_lateral_contact
         }

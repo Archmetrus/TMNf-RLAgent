@@ -105,7 +105,8 @@ class App(tk.Tk):
             "reward_current": tk.StringVar(value="0.00"),
             "reward_total": tk.StringVar(value="0.00"),
             "direction": tk.StringVar(value="--"),
-            "step_count": tk.StringVar(value="Adim: 0") # YENI: Adim sayaci
+            "step_count": tk.StringVar(value="Adim: 0"), # YENI: Adim sayaci
+            "contact": tk.StringVar(value="--") # YENI: Duvara temas icin
         }
 
         # Threading ve Egitim Yonetimi
@@ -135,54 +136,58 @@ class App(tk.Tk):
         ttk.Label(main_frame, text="TMInterface Gercek Zamanli Veri", style="Header.TLabel").grid(row=0, column=0, columnspan=2, pady=(0, 20), sticky="w")
         
         # --- Veri Gorsellestirme Paneli ---
-        grid_map = {
-            "Zaman:": ("time", 1),
-            "Hiz:": ("speed", 2),
-            "Hareket Yonu:": ("direction", 3),
-            "Pozisyon (x,y,z):": ("pos", 4),
-            "Hiz Vektoru (x,y,z):": ("vel", 5),
-            "Yaw Acisi (derece):": ("rot_yaw_deg", 6), # YENI
-            "Yaw Acisi (radyan):": ("rot_yaw_rad", 7), # YENI
-            "Checkpoint:": ("checkpoint", 8),
-            "Tur:": ("lap", 9),
-            "Sonraki Hedef (X,Y,Z):": ("target_cp_pos", 10), # YENI
-        }
-        for i, (label_text, (var_key, row)) in enumerate(grid_map.items()):
+        grid_map = [
+            ("Zaman:", "time", 1),
+            ("Hiz:", "speed", 2),
+            ("Hareket Yonu:", "direction", 3),
+            ("Pozisyon (x,y,z):", "pos", 4),
+            ("Duvara Temas:", "contact", 5),
+            ("Hiz Vektoru (x,y,z):", "vel", 6),
+            ("Yaw Acisi (derece):", "rot_yaw_deg", 7),
+            ("Yaw Acisi (radyan):", "rot_yaw_rad", 8),
+            ("Checkpoint:", "checkpoint", 9),
+            ("Tur:", "lap", 10),
+            ("Sonraki Hedef (X,Y,Z):", "target_cp_pos", 11),
+        ]
+
+        for label_text, var_key, row in grid_map:
             ttk.Label(main_frame, text=label_text).grid(row=row, column=0, sticky="w", padx=(0, 10), pady=2)
             ttk.Label(main_frame, textvariable=self.data_vars[var_key], style="Value.TLabel").grid(row=row, column=1, sticky="w")
         
-        # Odul gostergeleri
-        ttk.Label(main_frame, text="Anlik Odul/Ceza:").grid(row=11, column=0, sticky="w", padx=(0, 10), pady=(10, 2))
-        ttk.Label(main_frame, textvariable=self.data_vars["reward_current"], style="Value.TLabel").grid(row=11, column=1, sticky="w")
-        ttk.Label(main_frame, text="Bolum Toplam Odulu:").grid(row=12, column=0, sticky="w", padx=(0, 10), pady=2)
-        ttk.Label(main_frame, textvariable=self.data_vars["reward_total"], style="Value.TLabel").grid(row=12, column=1, sticky="w")
+        # Ayirici cizgi
+        separator = ttk.Separator(main_frame, orient='horizontal')
+        separator.grid(row=12, column=0, columnspan=2, sticky='ew', pady=10)
 
-        # Ayirici
-        ttk.Separator(main_frame, orient='horizontal').grid(row=13, column=0, columnspan=2, sticky='ew', pady=20)
-        
-        # --- Egitim Kontrol Paneli ---
-        ttk.Label(main_frame, text="RL Egitim Kontrolu", style="Header.TLabel").grid(row=14, column=0, columnspan=2, pady=(0, 15), sticky="w")
-        
-        self.start_training_button = ttk.Button(main_frame, text="Egitimi Baslat", command=self.start_training, style="Success.TButton", width=20)
-        self.start_training_button.grid(row=15, column=0, padx=5, pady=5)
-        
-        self.stop_training_button = ttk.Button(main_frame, text="Egitimi Durdur", command=self.stop_training, style="Danger.TButton", state="disabled", width=20)
-        self.stop_training_button.grid(row=15, column=1, padx=5, pady=5)
-        
-        # Durum Cubugu
-        status_bar = ttk.Frame(self, padding="5", style="TFrame")
-        status_bar.pack(side="bottom", fill="x")
-        self.listener_status_label = ttk.Label(status_bar, textvariable=self.data_vars["listener_status"])
+        # --- Egitim Kontrol Paneli (main_frame icine tasindi ve yeniden duzenlendi) ---
+        ttk.Label(main_frame, text="RL Egitim Kontrolu", style="Header.TLabel").grid(row=13, column=0, columnspan=2, sticky="w", pady=(0, 5))
+
+        # Butonlar
+        self.start_button = ttk.Button(main_frame, text="Egitimi Baslat", command=self.start_training)
+        self.start_button.grid(row=14, column=0, padx=5, pady=5, sticky="ew")
+        self.stop_button = ttk.Button(main_frame, text="Egitimi Durdur", command=self.stop_training, state="disabled")
+        self.stop_button.grid(row=14, column=1, padx=5, pady=5, sticky="ew")
+
+        # Odul Gostergeleri (Kendi satirlarina alindi)
+        ttk.Label(main_frame, text="Anlik Odul/Ceza:").grid(row=15, column=0, sticky="w")
+        ttk.Label(main_frame, textvariable=self.data_vars["reward_current"]).grid(row=15, column=1, sticky="w")
+
+        ttk.Label(main_frame, text="Bolum Toplam Odulu:").grid(row=16, column=0, sticky="w")
+        ttk.Label(main_frame, textvariable=self.data_vars["reward_total"]).grid(row=16, column=1, sticky="w")
+
+        # --- Alt Durum Cubugu ---
+        status_frame = ttk.Frame(self, padding=(10, 5))
+        status_frame.pack(side="bottom", fill="x")
+        self.listener_status_label = ttk.Label(status_frame, textvariable=self.data_vars["listener_status"])
         self.listener_status_label.pack(side="left")
         
-        self.training_status_label = ttk.Label(status_bar, textvariable=self.data_vars["training_status"])
+        self.training_status_label = ttk.Label(status_frame, textvariable=self.data_vars["training_status"])
         self.training_status_label.pack(side="left", padx=20)
         
         # YENI: Adim sayaci etiketi
-        self.step_count_label = ttk.Label(status_bar, textvariable=self.data_vars["step_count"], style="Status.Idle.TLabel")
+        self.step_count_label = ttk.Label(status_frame, textvariable=self.data_vars["step_count"], style="Status.Idle.TLabel")
         self.step_count_label.pack(side="left", padx=20)
 
-        self.fps_label = ttk.Label(status_bar, textvariable=self.data_vars["fps"])
+        self.fps_label = ttk.Label(status_frame, textvariable=self.data_vars["fps"])
         self.fps_label.pack(side="right")
         
         # Veri Dinleyici Butonlari (en altta)
@@ -355,6 +360,10 @@ class App(tk.Tk):
                 self.data_vars["direction"].set(car_state.direction)
                 # YENI: Hedef checkpoint pozisyonunu guncelle
                 self.data_vars["target_cp_pos"].set(f"({int(car_state.target_cp_x)}, {int(car_state.target_cp_y)}, {int(car_state.target_cp_z)})")
+                
+                # YENI: Duvara temas durumunu guncelle
+                contact_status = "Evet" if car_state.has_lateral_contact else "Hayir"
+                self.data_vars["contact"].set(contact_status)
 
             if self.listener_running:
                 elapsed = time.time() - self.start_time

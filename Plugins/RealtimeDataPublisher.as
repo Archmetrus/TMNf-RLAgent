@@ -166,6 +166,13 @@ void OnRunStep(SimulationManager@ simManager)
     // Yaris baslamadiysa veya bittiyse gec
     if (simManager.RaceTime < 0) return;
     
+    // --- Veri Toplama ---
+    TM::PlayerInfo@ playerInfo = simManager.get_PlayerInfo();
+    TM::HmsDyna@ dyna = simManager.get_Dyna();
+    TM::SceneVehicleCar@ car = simManager.get_SceneVehicleCar(); // YENI: Arac bilgilerini almak icin
+
+    if (playerInfo is null || dyna is null || car is null) return;
+
     // Pozisyon bilgisi (LowInputBf.as satir 90 - CALISIYOR!)
     vec3 pos = simManager.Dyna.CurrentState.Location.Position;
     
@@ -208,15 +215,21 @@ void OnRunStep(SimulationManager@ simManager)
     int currentCP = simManager.PlayerInfo.CurCheckpointCount;
     int currentLap = simManager.PlayerInfo.CurLap;
     
-    // CSV formatinda veri hazirla (YENI FORMAT)
-    string csv = raceTime + "," +
-                 pos.x + "," + pos.y + "," + pos.z + "," +
-                 vel.x + "," + vel.y + "," + vel.z + "," +
-                 speed + "," +
-                 yaw + "," +
-                 currentCP + "," + currentLap + "," +
-                 targetPos.x + "," + targetPos.y + "," + targetPos.z;
-    
+    // YENI: Yandan temas bilgisini al (1 = Evet, 0 = Hayir)
+    int hasLateralContact = car.HasAnyLateralContact ? 1 : 0;
+
+    // --- Veriyi String Olarak Formatlama ---
+    string data = ""
+        + raceTime + ","
+        + speed + ","
+        + pos.x + "," + pos.y + "," + pos.z + ","
+        + vel.x + "," + vel.y + "," + vel.z + ","
+        + yaw + ","
+        + playerInfo.CurCheckpointCount + ","
+        + playerInfo.CurLap + ","
+        + targetPos.x + "," + targetPos.y + "," + targetPos.z + ","
+        + hasLateralContact; // YENI: Temas bilgisini sona ekle
+
     // Konsol degiskenlerine yaz
     SetVariable("rt_time", raceTime);
     SetVariable("rt_pos_x", pos.x);
@@ -231,12 +244,10 @@ void OnRunStep(SimulationManager@ simManager)
     SetVariable("rt_roll", roll);  // Debug icin hala yazdiriliyor ama CSV'de yok
     SetVariable("rt_checkpoint", currentCP);
     SetVariable("rt_lap", currentLap);
-    SetVariable("rt_data_csv", csv);
+    SetVariable("rt_data_csv", data);
     
-    // Panoya kopyala (her 100ms'de bir, cok sik olmasin)
-    if (raceTime % 100 == 0) {
-        IO::SetClipboard(csv);
-    }
+    // Veriyi panoya kopyala
+    IO::SetClipboard(data);
     
     // DEBUG: Ilk saniyede veriyi goster
     if (raceTime == 1000) {
@@ -245,7 +256,7 @@ void OnRunStep(SimulationManager@ simManager)
         print("Hiz: " + speed + " km/h");
         print("KESIN YAW (Radyan): " + yaw);
         print("Checkpoint: " + currentCP + " | Lap: " + currentLap);
-        print("CSV: " + csv);
+        print("CSV: " + data);
         print("Pano guncelleniyor!");
     }
     

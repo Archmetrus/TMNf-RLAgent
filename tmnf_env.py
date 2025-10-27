@@ -26,12 +26,15 @@ class TMNFEnv(gym.Env):
         # YENI: Odul hesaplamasi icin onceki adimin bilgilerini sakla
         self.last_distance_to_target = float('inf')
         self.last_checkpoint_count = 0
+        # YENI: Gaz/Fren durumunu takip etmek icin
+        self.gas_pressed = False
+        self.brake_pressed = False
 
         # --- AKSIYON ALANI (ACTION SPACE) - GELISTIRILDI ---
-        # Ajan artik ayni anda iki karar verecek:
-        # 1. Direksiyon (5 secenek): Tam Sol, Hafif Sol, Duz, Hafif Sag, Tam Sag
-        # 2. Gaz/Fren (3 secenek): Gaz, Bos, Fren
-        self.action_space = spaces.MultiDiscrete([5, 3])
+        # Ajan artik iki surekli deger uretecek:
+        # 1. Direksiyon: [-1.0, 1.0] (tam sol, tam sag)
+        # 2. Gaz/Fren: [-1.0, 1.0] (tam fren, tam gaz)
+        self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(2,), dtype=np.float32)
 
         # Aksiyonlari komutlara cevirmek icin haritalar
         self.steer_map = {
@@ -94,31 +97,47 @@ class TMNFEnv(gym.Env):
 
     def _handle_action(self, action):
         """
-        Ajanin [direksiyon, gaz/fren] aksiyonunu TMInterface komutlarina cevirir.
-        Her adimda, hem gaz hem de fren durumu acikca belirtilir.
+        Ajanin surekli aksiyonlarini (direksiyon, gaz/fren) oyun komutlarina donusturur.
+        Bu fonksiyon, press/release komutlarini yoneterek durumu takip eder.
         """
-        steer_action, throttle_action = action
+        steer_action = action[0]
+        throttle_brake_action = action[1]
         
-        commands_to_send = []
-        
-        # 1. Direksiyon komutunu ekle
-        steer_command = self.steer_map.get(steer_action)
-        if steer_command:
-            commands_to_send.append(steer_command)
-            
-        # 2. Gaz/Fren komutunu belirle (YENI MANTIK)
-        # 0: Gaz, 1: Bos, 2: Fren
-        if throttle_action == 0: # Gaz ver
-            commands_to_send.append("press up")
-            commands_to_send.append("rel down")   # Freni biraktigindan emin ol
-        elif throttle_action == 2: # Fren yap
-            commands_to_send.append("press down")
-            commands_to_send.append("rel up")     # Gazi biraktigindan emin ol
-        else: # Bos'ta kal (1)
-            commands_to_send.append("rel up")
-            commands_to_send.append("rel down")
+        commands = []
 
-        self.controller.send_command(commands_to_send)
+        # 1. Direksiyon Komutu (Her adimda gonderilir)
+        # YENI: Ajanin [-1, 1] araligindaki ciktisini oyunun istedigi [-65536, 65536] araligina olcekle
+        steer_value = int(steer_action * 65536)
+        commands.append(f"steer {steer_value}")
+
+        # 2. Gaz/Fren Mantigi
+        # Gaz verilecek durum (deger > 0.15)
+        if throttle_brake_action > 0.15:
+            if self.brake_pressed:
+                commands.append("rel down")
+                self.brake_pressed = False
+            if not self.gas_pressed:
+                commands.append("press up")
+                self.gas_pressed = True
+        # Fren yapilacak durum (deger < -0.15)
+        elif throttle_brake_action < -0.15:
+            if self.gas_pressed:
+                commands.append("rel up")
+                self.gas_pressed = False
+            if not self.brake_pressed:
+                commands.append("press down")
+                self.brake_pressed = True
+        # Bosta kalma durumu (aradaki kucuk olu bolge)
+        else:
+            if self.gas_pressed:
+                commands.append("rel up")
+                self.gas_pressed = False
+            if self.brake_pressed:
+                commands.append("rel down")
+                self.brake_pressed = False
+
+        if commands:
+            self.controller.send_command(commands)
 
     def step(self, action):
         """
@@ -229,17 +248,14 @@ class TMNFEnv(gym.Env):
         # YENI: Reset'te bu degerleri de sifirla
         self.last_distance_to_target = float('inf')
         self.last_checkpoint_count = 0
+        # YENI: Reset'te gaz/fren durumunu da sifirla
+        self.gas_pressed = False
+        self.brake_pressed = False
 
-        # Oyunu yeniden baslat (dogru komut 'press delete')
-        print("[ORTAM] Yaris yeniden baslatiliyor...")
-        self.controller.send_command(["press delete"])
+        # Oyunu yeniden baslat ve baslangicta tum tuslarin birakildigindan emin ol
+        self.controller.send_command(["press delete", "rel up", "rel down"])
         
-        # Oyunun kendine gelmesi icin kisa bir bekleme
         time.sleep(0.5) 
-
-        # Gaza bas ve basili tut (Artik bu gerekli degil, ajan kendi karar verecek)
-        # self.controller.send_command("press up")
-        # self.last_action = None # Aksiyon durumunu sifirla
 
         # Ilk gozlemi al ve dondur
         observation = self._get_observation()
