@@ -274,15 +274,15 @@ class App(tk.Tk):
         if self.training_running and not self.training_should_stop:
             self.training_should_stop = True
             self.set_training_status("Durduruluyor...", "stopped")
-            self.stop_training_button.config(state="disabled")
+            self.stop_button.config(state="disabled")
 
     def update_training_buttons(self):
         if self.training_running:
-            self.start_training_button.config(state="disabled")
-            self.stop_training_button.config(state="normal" if not self.training_should_stop else "disabled")
+            self.start_button.config(state="disabled")
+            self.stop_button.config(state="normal" if not self.training_should_stop else "disabled")
         else:
-            self.start_training_button.config(state="normal")
-            self.stop_training_button.config(state="disabled")
+            self.start_button.config(state="normal")
+            self.stop_button.config(state="disabled")
 
     def set_training_status(self, message, status_type):
         self.data_vars["training_status"].set(message)
