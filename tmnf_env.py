@@ -147,8 +147,9 @@ class TMNFEnv(gym.Env):
         self._handle_action(action)
 
         # AJANIN KARAR SURESI
-        # Ajanin verdigi her kararin 0.5 saniye boyunca gecerli olmasini sagla.
-        time.sleep(0.2) 
+        # Ajanin verdigi her kararin 0.05 saniye boyunca gecerli olmasini sagla.
+        # Oyun 100ms'de bir okuyor, daha hizli kararlar daha iyi tepki verir.
+        time.sleep(0.05) 
 
         # 2. Yeni durumu (gozlem) oyundan al
         observation = self._get_observation()
@@ -171,9 +172,9 @@ class TMNFEnv(gym.Env):
             reward_forward = 0
             scaling_factor = 5.0
             if forward_speed > 0:
-                reward_forward = (forward_speed / scaling_factor) ** 3
+                reward_forward = (forward_speed / scaling_factor) ** 2
             else:
-                reward_forward = -((forward_speed / scaling_factor) ** 6)
+                reward_forward = -((forward_speed / scaling_factor) ** 2)
 
             # 2. YENI Ceza: Zaman Cezasi
             # Ajanin hedefe hizli ulasmasini tesvik etmek icin her adimda kucuk bir ceza.
