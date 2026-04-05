@@ -39,10 +39,7 @@ class CarState:
             # YENI: Duvara temas verisini al
             self.has_lateral_contact = bool(int(parts[14]))
 
-            # Eger veri gecerliyse, hareket yonunu hesapla
             self.valid = True
-            if self.valid:
-                self._calculate_direction()
         except (ValueError, IndexError) as e:
             self.valid = False
             pass

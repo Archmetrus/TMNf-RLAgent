@@ -221,9 +221,12 @@ class App(tk.Tk):
                 self.env, 
                 verbose=1, 
                 tensorboard_log=logdir,
-                learning_rate=0.0001,
-                gamma=0.995,
-                n_steps=32 # YENI: Strateji guncelleme sikligi (daha sık = daha hizli ogrenme)
+                learning_rate=0.0003,
+                gamma=0.99,
+                n_steps=256,
+                batch_size=64,
+                n_epochs=10,
+                ent_coef=0.01
             )
             
             self.set_training_status("Egitim basladi...", "running")

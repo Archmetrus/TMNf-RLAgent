@@ -36,21 +36,18 @@ class TMNFEnv(gym.Env):
         # 2. Gaz/Fren: [-1.0, 1.0] (tam fren, tam gaz)
         self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(2,), dtype=np.float32)
 
-        # Aksiyonlari komutlara cevirmek icin haritalar
-        self.steer_map = {
-            0: "steer -65536",  # Tam Sol
-            1: "steer -25000",  # Hafif Sol
-            2: "steer 0",       # Duz
-            3: "steer 25000",   # Hafif Sag
-            4: "steer 65536"    # Tam Sag
-        }
-        
-        # --- Gozlem Alani (Observation Space) - GELISTIRILDI ---
-        # [hiz, yaw, target_relative_x, target_relative_z]
-        # Pozisyon bilgisi yerine hedefe olan goreceli pozisyonu veriyoruz.
-        # Bu, ajan'in farkli haritalarda daha iyi genelleme yapmasini saglar.
-        observation_shape = 4 
+        # --- Gozlem Alani (Observation Space) ---
+        # [hiz, sin(yaw), cos(yaw), target_relative_x, target_relative_z]
+        observation_shape = 5
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(observation_shape,), dtype=np.float32)
+
+        # --- Episode Sonlandirma Degiskenleri ---
+        self.step_count = 0
+        self.max_steps_per_episode = 2000  # ~100 saniye (2000 * 0.05s)
+        self.low_speed_counter = 0
+        self.low_speed_threshold = 60     # 60 adim (~3 sn) boyunca yavas kalirsa bitir
+        self.backward_counter = 0
+        self.backward_threshold = 40      # 40 adim (~2 sn) boyunca geri giderse bitir
 
         # --- Kontrolcu ---
         self.controller = TMInterfaceController()
@@ -85,10 +82,11 @@ class TMNFEnv(gym.Env):
             target_relative_x = world_vec[1] * sin_yaw + world_vec[0] * cos_yaw
             
             observation = np.array([
-                self.current_state.speed / 100.0, # Hizi normalize et (yaklasik 0-10 arasi)
-                self.current_state.yaw,
-                target_relative_x / 100.0, # Mesafeyi normalize et
-                target_relative_z / 100.0  # Mesafeyi normalize et
+                self.current_state.speed / 100.0,
+                np.sin(self.current_state.yaw),
+                np.cos(self.current_state.yaw),
+                target_relative_x / 100.0,
+                target_relative_z / 100.0
             ], dtype=np.float32)
             return observation
 
@@ -147,9 +145,8 @@ class TMNFEnv(gym.Env):
         self._handle_action(action)
 
         # AJANIN KARAR SURESI
-        # Ajanin verdigi her kararin 0.05 saniye boyunca gecerli olmasini sagla.
-        # Oyun 100ms'de bir okuyor, daha hizli kararlar daha iyi tepki verir.
         time.sleep(0.05) 
+        self.step_count += 1
 
         # 2. Yeni durumu (gozlem) oyundan al
         observation = self._get_observation()
@@ -204,7 +201,7 @@ class TMNFEnv(gym.Env):
             checkpoint_bonus = 0
             current_cp_count = self.current_state.checkpoint
             if current_cp_count > self.last_checkpoint_count:
-                checkpoint_bonus = 500.0
+                checkpoint_bonus = 50.0
                 print(f"[ODUL] Checkpoint gecildi! +{checkpoint_bonus} bonus!")
             self.last_checkpoint_count = current_cp_count
 
@@ -219,7 +216,7 @@ class TMNFEnv(gym.Env):
                 self.last_distance_to_target = current_distance
             
             distance_diff = self.last_distance_to_target - current_distance
-            distance_reward = distance_diff * 0.1 # Yaklasilan her metreyi odullendir
+            distance_reward = distance_diff * 0.5
             self.last_distance_to_target = current_distance
 
             # Tum odul ve cezalari topla
@@ -229,11 +226,31 @@ class TMNFEnv(gym.Env):
         self.last_reward = reward
         self.total_reward += reward
 
-        # 4. Bolumun bitip bitmedigini kontrol et -> KALDIRILDI
-        # Ajan artik sadece manuel olarak durduruldugunda bolumu bitirecek.
+        # 4. Episode sonlandirma kontrolleri
         terminated = False
-        truncated = False 
+        truncated = False
         info = {}
+
+        if self.current_state and self.current_state.valid:
+            # Maksimum adim siniri (zaman asimi)
+            if self.step_count >= self.max_steps_per_episode:
+                truncated = True
+
+            # Dusuk hiz (takilma) tespiti
+            if self.current_state.speed < 2.0:
+                self.low_speed_counter += 1
+            else:
+                self.low_speed_counter = 0
+            if self.low_speed_counter >= self.low_speed_threshold:
+                terminated = True
+
+            # Geri gitme tespiti
+            if self.current_state.forward_speed < -1.0:
+                self.backward_counter += 1
+            else:
+                self.backward_counter = 0
+            if self.backward_counter >= self.backward_threshold:
+                terminated = True
 
         return observation, reward, terminated, truncated, info
 
@@ -246,12 +263,13 @@ class TMNFEnv(gym.Env):
         # Toplam odulu sifirla
         self.total_reward = 0.0
         self.last_reward = 0.0
-        # YENI: Reset'te bu degerleri de sifirla
         self.last_distance_to_target = float('inf')
         self.last_checkpoint_count = 0
-        # YENI: Reset'te gaz/fren durumunu da sifirla
         self.gas_pressed = False
         self.brake_pressed = False
+        self.step_count = 0
+        self.low_speed_counter = 0
+        self.backward_counter = 0
 
         # Oyunu yeniden baslat ve baslangicta tum tuslarin birakildigindan emin ol
         self.controller.send_command(["press delete", "rel up", "rel down"])
