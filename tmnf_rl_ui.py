@@ -58,34 +58,45 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
 
-        self.title("TMNF RL Egitim Arayuzu")
-        self.geometry("550x850") # Pencere boyutu genisletildi
-        self.configure(bg="#2E2E2E")
+        self.title("TMNF RL Kontrol Paneli")
+        self.geometry("760x820")
+        self.minsize(680, 720)
+        self.configure(bg="#202225")
 
         # --- Stil Ayarlari ---
         style = ttk.Style(self)
         style.theme_use('clam')
         # ... (Stil kodlari ayni kaliyor)
-        dark_bg = "#2E2E2E"
+        dark_bg = "#202225"
+        panel_bg = "#2B2E33"
+        panel_border = "#3C4148"
         light_text = "#EAEAEA"
-        value_text = "#40E0D0" # Turkuaz
+        muted_text = "#AAB2BF"
+        value_text = "#48D6C8" # Turkuaz
         header_text = "#FFFFFF"
         status_running_text = "#8AE234" # Yesil
         status_stopped_text = "#EF2929" # Kirmizi
         status_idle_text = "#729FCF" # Mavi
 
         style.configure("TFrame", background=dark_bg)
-        style.configure("TLabel", background=dark_bg, foreground=light_text, font=("Segoe UI", 11))
-        style.configure("Header.TLabel", background=dark_bg, foreground=header_text, font=("Segoe UI", 16, "bold"))
-        style.configure("Value.TLabel", background=dark_bg, foreground=value_text, font=("Consolas", 12, "bold"))
-        style.configure("Status.Running.TLabel", background=dark_bg, foreground=status_running_text, font=("Segoe UI", 10, "bold"))
-        style.configure("Status.Stopped.TLabel", background=dark_bg, foreground=status_stopped_text, font=("Segoe UI", 10, "bold"))
-        style.configure("Status.Idle.TLabel", background=dark_bg, foreground=status_idle_text, font=("Segoe UI", 10, "bold"))
+        style.configure("Panel.TFrame", background=panel_bg)
+        style.configure("TLabel", background=dark_bg, foreground=light_text, font=("Segoe UI", 10))
+        style.configure("Panel.TLabel", background=panel_bg, foreground=light_text, font=("Segoe UI", 10))
+        style.configure("Muted.TLabel", background=panel_bg, foreground=muted_text, font=("Segoe UI", 9))
+        style.configure("Title.TLabel", background=dark_bg, foreground=header_text, font=("Segoe UI", 18, "bold"))
+        style.configure("Header.TLabel", background=panel_bg, foreground=header_text, font=("Segoe UI", 12, "bold"))
+        style.configure("Value.TLabel", background=panel_bg, foreground=value_text, font=("Consolas", 11, "bold"))
+        style.configure("Metric.TLabel", background=panel_bg, foreground=value_text, font=("Consolas", 14, "bold"))
+        style.configure("Status.Running.TLabel", background=panel_bg, foreground=status_running_text, font=("Segoe UI", 10, "bold"))
+        style.configure("Status.Stopped.TLabel", background=panel_bg, foreground=status_stopped_text, font=("Segoe UI", 10, "bold"))
+        style.configure("Status.Idle.TLabel", background=panel_bg, foreground=status_idle_text, font=("Segoe UI", 10, "bold"))
+        style.configure("Panel.TLabelframe", background=panel_bg, foreground=header_text, bordercolor=panel_border, relief="solid")
+        style.configure("Panel.TLabelframe.Label", background=dark_bg, foreground=header_text, font=("Segoe UI", 11, "bold"))
 
-        style.configure("TButton", background="#4A4A4A", foreground=light_text, font=("Segoe UI", 10, "bold"), borderwidth=0, relief="flat", padding=6)
-        style.map("TButton", background=[('active', '#5A5A5A'), ('disabled', '#3A3A3A')], foreground=[('disabled', '#777777')])
-        style.configure("Success.TButton", background="#4E9A06") # Yesil
-        style.configure("Danger.TButton", background="#A40000") # Kirmizi
+        style.configure("TButton", background="#42474F", foreground=light_text, font=("Segoe UI", 10, "bold"), borderwidth=0, relief="flat", padding=(10, 7))
+        style.map("TButton", background=[('active', '#505761'), ('disabled', '#30343A')], foreground=[('disabled', '#777777')])
+        style.configure("Success.TButton", background="#3F7F52", foreground=light_text)
+        style.configure("Danger.TButton", background="#8A3A3A", foreground=light_text)
         
 
         # Veri saklama
@@ -140,84 +151,97 @@ class App(tk.Tk):
         self.update_ui()
 
     def create_widgets(self):
-        main_frame = ttk.Frame(self, padding="20", style="TFrame")
+        main_frame = ttk.Frame(self, padding=18, style="TFrame")
         main_frame.pack(expand=True, fill="both")
+        main_frame.columnconfigure(0, weight=1)
         main_frame.columnconfigure(1, weight=1)
+        main_frame.rowconfigure(2, weight=1)
 
-        # Baslik
-        ttk.Label(main_frame, text="TMInterface Gercek Zamanli Veri", style="Header.TLabel").grid(row=0, column=0, columnspan=2, pady=(0, 20), sticky="w")
-        
-        # --- Veri Gorsellestirme Paneli ---
+        title_row = ttk.Frame(main_frame, style="TFrame")
+        title_row.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 14))
+        title_row.columnconfigure(0, weight=1)
+        ttk.Label(title_row, text="TMNF RL Kontrol Paneli", style="Title.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(title_row, text="TCP 127.0.0.1:8765", style="TLabel").grid(row=0, column=1, sticky="e")
+
+        connection_frame = ttk.LabelFrame(main_frame, text="Baglanti", padding=12, style="Panel.TLabelframe")
+        connection_frame.grid(row=1, column=0, sticky="ew", padx=(0, 8), pady=(0, 12))
+        connection_frame.columnconfigure(0, weight=1)
+        connection_frame.columnconfigure(1, weight=1)
+        self.start_listener_button = ttk.Button(connection_frame, text="Veri Izlemeyi Baslat", command=self.start_listening)
+        self.start_listener_button.grid(row=0, column=0, sticky="ew", padx=(0, 6))
+        self.stop_listener_button = ttk.Button(connection_frame, text="Veri Izlemeyi Durdur", command=self.stop_listening, state="disabled")
+        self.stop_listener_button.grid(row=0, column=1, sticky="ew", padx=(6, 0))
+        ttk.Label(connection_frame, text="Soket:", style="Muted.TLabel").grid(row=1, column=0, sticky="w", pady=(10, 0))
+        self.listener_status_label = ttk.Label(connection_frame, textvariable=self.data_vars["listener_status"], style="Status.Idle.TLabel")
+        self.listener_status_label.grid(row=1, column=1, sticky="e", pady=(10, 0))
+
+        run_frame = ttk.LabelFrame(main_frame, text="Calisma", padding=12, style="Panel.TLabelframe")
+        run_frame.grid(row=1, column=1, sticky="ew", padx=(8, 0), pady=(0, 12))
+        run_frame.columnconfigure(0, weight=1)
+        run_frame.columnconfigure(1, weight=1)
+        ttk.Label(run_frame, text="Durum:", style="Muted.TLabel").grid(row=0, column=0, sticky="w")
+        self.training_status_label = ttk.Label(run_frame, textvariable=self.data_vars["training_status"], style="Status.Idle.TLabel")
+        self.training_status_label.grid(row=0, column=1, sticky="e")
+        ttk.Label(run_frame, text="Adim:", style="Muted.TLabel").grid(row=1, column=0, sticky="w", pady=(8, 0))
+        self.step_count_label = ttk.Label(run_frame, textvariable=self.data_vars["step_count"], style="Status.Idle.TLabel")
+        self.step_count_label.grid(row=1, column=1, sticky="e", pady=(8, 0))
+        ttk.Label(run_frame, text="FPS:", style="Muted.TLabel").grid(row=2, column=0, sticky="w", pady=(8, 0))
+        self.fps_label = ttk.Label(run_frame, textvariable=self.data_vars["fps"], style="Value.TLabel")
+        self.fps_label.grid(row=2, column=1, sticky="e", pady=(8, 0))
+
+        telemetry_frame = ttk.LabelFrame(main_frame, text="Canli Telemetri", padding=12, style="Panel.TLabelframe")
+        telemetry_frame.grid(row=2, column=0, sticky="nsew", padx=(0, 8), pady=(0, 12))
+        telemetry_frame.columnconfigure(1, weight=1)
+
         grid_map = [
-            ("Zaman:", "time", 1),
-            ("Hiz:", "speed", 2),
-            ("Hareket Yonu:", "direction", 3),
-            ("Pozisyon (x,y,z):", "pos", 4),
-            ("Duvara Temas:", "contact", 5),
-            ("Hiz Vektoru (x,y,z):", "vel", 6),
-            ("Yaw Acisi (derece):", "rot_yaw_deg", 7),
-            ("Yaw Acisi (radyan):", "rot_yaw_rad", 8),
-            ("Checkpoint:", "checkpoint", 9),
-            ("Tur:", "lap", 10),
-            ("Sonraki Hedef (X,Y,Z):", "target_cp_pos", 11),
+            ("Zaman", "time"),
+            ("Hiz", "speed"),
+            ("Hareket", "direction"),
+            ("Pozisyon", "pos"),
+            ("Temas", "contact"),
+            ("Hiz Vektoru", "vel"),
+            ("Yaw derece", "rot_yaw_deg"),
+            ("Yaw radyan", "rot_yaw_rad"),
+            ("Checkpoint", "checkpoint"),
+            ("Tur", "lap"),
+            ("Hedef", "target_cp_pos"),
         ]
 
-        for label_text, var_key, row in grid_map:
-            ttk.Label(main_frame, text=label_text).grid(row=row, column=0, sticky="w", padx=(0, 10), pady=2)
-            ttk.Label(main_frame, textvariable=self.data_vars[var_key], style="Value.TLabel").grid(row=row, column=1, sticky="w")
-        
-        # Ayirici cizgi
-        separator = ttk.Separator(main_frame, orient='horizontal')
-        separator.grid(row=12, column=0, columnspan=2, sticky='ew', pady=10)
+        for row, (label_text, var_key) in enumerate(grid_map):
+            ttk.Label(telemetry_frame, text=label_text, style="Muted.TLabel").grid(row=row, column=0, sticky="w", pady=4, padx=(0, 14))
+            ttk.Label(telemetry_frame, textvariable=self.data_vars[var_key], style="Value.TLabel").grid(row=row, column=1, sticky="ew", pady=4)
 
-        # --- Egitim Kontrol Paneli (main_frame icine tasindi ve yeniden duzenlendi) ---
-        ttk.Label(main_frame, text="RL Egitim Kontrolu", style="Header.TLabel").grid(row=13, column=0, columnspan=2, sticky="w", pady=(0, 5))
+        control_frame = ttk.LabelFrame(main_frame, text="Egitim ve Model", padding=12, style="Panel.TLabelframe")
+        control_frame.grid(row=2, column=1, sticky="nsew", padx=(8, 0), pady=(0, 12))
+        control_frame.columnconfigure(0, weight=1)
+        control_frame.columnconfigure(1, weight=1)
 
-        # Butonlar
-        self.start_button = ttk.Button(main_frame, text="Egitimi Baslat", command=self.start_training)
-        self.start_button.grid(row=14, column=0, padx=5, pady=5, sticky="ew")
-        self.stop_button = ttk.Button(main_frame, text="Egitimi Durdur", command=self.stop_training, state="disabled")
-        self.stop_button.grid(row=14, column=1, padx=5, pady=5, sticky="ew")
+        ttk.Label(control_frame, text="Egitim", style="Header.TLabel").grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 8))
+        self.start_button = ttk.Button(control_frame, text="Egitimi Baslat", command=self.start_training, style="Success.TButton")
+        self.start_button.grid(row=1, column=0, padx=(0, 6), pady=4, sticky="ew")
+        self.stop_button = ttk.Button(control_frame, text="Egitimi Durdur", command=self.stop_training, state="disabled", style="Danger.TButton")
+        self.stop_button.grid(row=1, column=1, padx=(6, 0), pady=4, sticky="ew")
 
-        self.load_model_button = ttk.Button(main_frame, text="Model Yukle", command=self.load_model)
-        self.load_model_button.grid(row=15, column=0, padx=5, pady=5, sticky="ew")
-        ttk.Label(main_frame, textvariable=self.data_vars["model_path"], style="Value.TLabel").grid(row=15, column=1, sticky="w")
+        ttk.Separator(control_frame, orient="horizontal").grid(row=2, column=0, columnspan=2, sticky="ew", pady=14)
+        ttk.Label(control_frame, text="Model", style="Header.TLabel").grid(row=3, column=0, columnspan=2, sticky="w", pady=(0, 8))
+        self.load_model_button = ttk.Button(control_frame, text="Model Yukle", command=self.load_model)
+        self.load_model_button.grid(row=4, column=0, padx=(0, 6), pady=4, sticky="ew")
+        self.watch_button = ttk.Button(control_frame, text="Modeli Izle", command=self.start_watch, state="disabled", style="Success.TButton")
+        self.watch_button.grid(row=4, column=1, padx=(6, 0), pady=4, sticky="ew")
+        self.stop_watch_button = ttk.Button(control_frame, text="Izlemeyi Durdur", command=self.stop_watch, state="disabled", style="Danger.TButton")
+        self.stop_watch_button.grid(row=5, column=0, columnspan=2, pady=4, sticky="ew")
+        model_label = ttk.Label(control_frame, textvariable=self.data_vars["model_path"], style="Value.TLabel", wraplength=300)
+        model_label.grid(row=6, column=0, columnspan=2, sticky="ew", pady=(8, 0))
 
-        self.watch_button = ttk.Button(main_frame, text="Modeli Izle", command=self.start_watch, state="disabled")
-        self.watch_button.grid(row=16, column=0, padx=5, pady=5, sticky="ew")
-        self.stop_watch_button = ttk.Button(main_frame, text="Izlemeyi Durdur", command=self.stop_watch, state="disabled")
-        self.stop_watch_button.grid(row=16, column=1, padx=5, pady=5, sticky="ew")
-
-        # Odul Gostergeleri (Kendi satirlarina alindi)
-        ttk.Label(main_frame, text="Anlik Odul/Ceza:").grid(row=17, column=0, sticky="w")
-        ttk.Label(main_frame, textvariable=self.data_vars["reward_current"]).grid(row=17, column=1, sticky="w")
-
-        ttk.Label(main_frame, text="Bolum Toplam Odulu:").grid(row=18, column=0, sticky="w")
-        ttk.Label(main_frame, textvariable=self.data_vars["reward_total"]).grid(row=18, column=1, sticky="w")
-
-        # --- Alt Durum Cubugu ---
-        status_frame = ttk.Frame(self, padding=(10, 5))
-        status_frame.pack(side="bottom", fill="x")
-        self.listener_status_label = ttk.Label(status_frame, textvariable=self.data_vars["listener_status"])
-        self.listener_status_label.pack(side="left")
-        
-        self.training_status_label = ttk.Label(status_frame, textvariable=self.data_vars["training_status"])
-        self.training_status_label.pack(side="left", padx=20)
-        
-        # YENI: Adim sayaci etiketi
-        self.step_count_label = ttk.Label(status_frame, textvariable=self.data_vars["step_count"], style="Status.Idle.TLabel")
-        self.step_count_label.pack(side="left", padx=20)
-
-        self.fps_label = ttk.Label(status_frame, textvariable=self.data_vars["fps"])
-        self.fps_label.pack(side="right")
-        
-        # Veri Dinleyici Butonlari (en altta)
-        control_frame = ttk.Frame(self, padding="10", style="TFrame")
-        control_frame.pack(fill="x", side="bottom")
-        self.start_listener_button = ttk.Button(control_frame, text="Veri Izlemeyi Baslat", command=self.start_listening)
-        self.start_listener_button.pack(side="left", padx=5, pady=5)
-        self.stop_listener_button = ttk.Button(control_frame, text="Veri Izlemeyi Durdur", command=self.stop_listening, state="disabled")
-        self.stop_listener_button.pack(side="left", padx=5, pady=5)
+        ttk.Separator(control_frame, orient="horizontal").grid(row=7, column=0, columnspan=2, sticky="ew", pady=14)
+        reward_frame = ttk.Frame(control_frame, style="Panel.TFrame")
+        reward_frame.grid(row=8, column=0, columnspan=2, sticky="ew")
+        reward_frame.columnconfigure(0, weight=1)
+        reward_frame.columnconfigure(1, weight=1)
+        ttk.Label(reward_frame, text="Anlik Odul", style="Muted.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(reward_frame, text="Toplam Odul", style="Muted.TLabel").grid(row=0, column=1, sticky="w")
+        ttk.Label(reward_frame, textvariable=self.data_vars["reward_current"], style="Metric.TLabel").grid(row=1, column=0, sticky="w", pady=(4, 0))
+        ttk.Label(reward_frame, textvariable=self.data_vars["reward_total"], style="Metric.TLabel").grid(row=1, column=1, sticky="w", pady=(4, 0))
 
 
     # --- Egitim Fonksiyonlari ---

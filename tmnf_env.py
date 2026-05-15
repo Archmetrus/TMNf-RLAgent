@@ -199,7 +199,8 @@ class TMNFEnv(gym.Env):
             # 4. YENI Odul: Checkpoint Bonusu
             checkpoint_bonus = 0
             current_cp_count = self.current_state.checkpoint
-            if current_cp_count > self.last_checkpoint_count:
+            checkpoint_changed = current_cp_count > self.last_checkpoint_count
+            if checkpoint_changed:
                 checkpoint_bonus = 50.0
                 print(f"[ODUL] Checkpoint gecildi! +{checkpoint_bonus} bonus!")
             self.last_checkpoint_count = current_cp_count
@@ -213,9 +214,12 @@ class TMNFEnv(gym.Env):
             # Ilk adimda self.last_distance_to_target'i ayarla
             if self.last_distance_to_target == float('inf'):
                 self.last_distance_to_target = current_distance
-            
-            distance_diff = self.last_distance_to_target - current_distance
-            distance_reward = distance_diff * 0.5
+
+            if checkpoint_changed:
+                distance_reward = 0
+            else:
+                distance_diff = self.last_distance_to_target - current_distance
+                distance_reward = distance_diff * 0.5
             self.last_distance_to_target = current_distance
 
             # Tum odul ve cezalari topla
