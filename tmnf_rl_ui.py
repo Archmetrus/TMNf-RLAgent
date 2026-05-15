@@ -123,6 +123,7 @@ class App(tk.Tk):
         self.model = None
         self.env = None
         self.latest_car_state = None # En son gecerli araba durumunu saklamak icin
+        self.data_poll_interval_ms = 50
 
         self.create_widgets()
         self.update_ui()
@@ -257,6 +258,14 @@ class App(tk.Tk):
             
     def start_training(self):
         if not self.training_running:
+            if not self.listener_running:
+                messagebox.showwarning("Veri yok", "Once Veri Izlemeyi Baslat'a basin.")
+                return
+
+            if not self.latest_car_state or not self.latest_car_state.valid:
+                messagebox.showwarning("Veri yok", "Gecerli araba verisi gelmeden egitim baslatilamaz.")
+                return
+
             # Oyuna baglanmadan once kullaniciyi uyar
             if not messagebox.askyesno("Egitimi Baslat", "Egitimi baslatmak uzeresiniz.\n\nTMInterface'in acik ve bir haritanin yuklu oldugundan emin olun.\n\nDevam edilsin mi?"):
                 return
@@ -313,7 +322,7 @@ class App(tk.Tk):
                         self.data_queue.put(car_state)
             except Exception:
                 pass
-            time.sleep(0.05)
+            time.sleep(self.data_poll_interval_ms / 1000.0)
 
     def start_listening(self):
         if not self.listener_running:
@@ -382,7 +391,7 @@ class App(tk.Tk):
         except Exception as e:
             print(f"UI guncelleme hatasi: {e}")
         
-        self.after(50, self.update_ui)
+        self.after(self.data_poll_interval_ms, self.update_ui)
 
     def on_closing(self):
         # Tum thread'leri durdur

@@ -156,9 +156,9 @@ void OnRunStep(SimulationManager@ simManager)
     }
 
     // --- KOMUT YUKLEME (YENI - DOSYA LOAD SISTEMI) ---
-    // Her 100ms'de bir, Python'un yazdigi action.txt dosyasini oyuna yukle.
+    // Her 50ms'de bir, Python'un yazdigi action.txt dosyasini oyuna yukle.
     // Bu, AngelScript'in dosya okumasina gerek kalmadan komutlari calistirir.
-    if (simManager.RaceTime % 100 == 0)
+    if (simManager.RaceTime % 50 == 0)
     {
         ExecuteCommand("load action.txt");
     }
@@ -218,18 +218,6 @@ void OnRunStep(SimulationManager@ simManager)
     // YENI: Yandan temas bilgisini al (1 = Evet, 0 = Hayir)
     int hasLateralContact = car.HasAnyLateralContact ? 1 : 0;
 
-    // --- Veriyi String Olarak Formatlama ---
-    string data = ""
-        + raceTime + ","
-        + speed + ","
-        + pos.x + "," + pos.y + "," + pos.z + ","
-        + vel.x + "," + vel.y + "," + vel.z + ","
-        + yaw + ","
-        + playerInfo.CurCheckpointCount + ","
-        + playerInfo.CurLap + ","
-        + targetPos.x + "," + targetPos.y + "," + targetPos.z + ","
-        + hasLateralContact; // YENI: Temas bilgisini sona ekle
-
     // Konsol degiskenlerine yaz
     SetVariable("rt_time", raceTime);
     SetVariable("rt_pos_x", pos.x);
@@ -244,13 +232,36 @@ void OnRunStep(SimulationManager@ simManager)
     SetVariable("rt_roll", roll);  // Debug icin hala yazdiriliyor ama CSV'de yok
     SetVariable("rt_checkpoint", currentCP);
     SetVariable("rt_lap", currentLap);
-    SetVariable("rt_data_csv", data);
-    
-    // Veriyi panoya kopyala
-    IO::SetClipboard(data);
+    // Veriyi panoya 50ms'de bir kopyala.
+    if (raceTime % 50 == 0)
+    {
+        string data = ""
+            + raceTime + ","
+            + speed + ","
+            + pos.x + "," + pos.y + "," + pos.z + ","
+            + vel.x + "," + vel.y + "," + vel.z + ","
+            + yaw + ","
+            + playerInfo.CurCheckpointCount + ","
+            + playerInfo.CurLap + ","
+            + targetPos.x + "," + targetPos.y + "," + targetPos.z + ","
+            + hasLateralContact;
+
+        SetVariable("rt_data_csv", data);
+        IO::SetClipboard(data);
+    }
     
     // DEBUG: Ilk saniyede veriyi goster
     if (raceTime == 1000) {
+        string data = ""
+            + raceTime + ","
+            + speed + ","
+            + pos.x + "," + pos.y + "," + pos.z + ","
+            + vel.x + "," + vel.y + "," + vel.z + ","
+            + yaw + ","
+            + playerInfo.CurCheckpointCount + ","
+            + playerInfo.CurLap + ","
+            + targetPos.x + "," + targetPos.y + "," + targetPos.z + ","
+            + hasLateralContact;
         print("OnRunStep CALISIYOR!");
         print("Pozisyon: " + pos.ToString());
         print("Hiz: " + speed + " km/h");

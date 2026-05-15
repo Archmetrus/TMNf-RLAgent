@@ -43,6 +43,7 @@ class TMNFEnv(gym.Env):
 
         # --- Episode Sonlandirma Degiskenleri ---
         self.step_count = 0
+        self.action_interval = 0.05        # TMInterface action.txt'yi 50ms'de bir yukluyor
         self.max_steps_per_episode = 2000  # ~100 saniye (2000 * 0.05s)
         self.low_speed_counter = 0
         self.low_speed_threshold = 60     # 60 adim (~3 sn) boyunca yavas kalirsa bitir
@@ -71,15 +72,13 @@ class TMNFEnv(gym.Env):
             # Dunya koordinatlarinda aractan hedefe olan vektor
             world_vec = target_pos - car_pos
             
-            # Bu vektoru, aracin kendi bakis acisina gore dondur
-            # Donus matrisi: [[cos, sin], [-sin, cos]]
             cos_yaw = np.cos(car_yaw)
             sin_yaw = np.sin(car_yaw)
             
             # local_z: Hedef onumde/arkamda ne kadar mesafede
             # local_x: Hedef sagimda/solumda ne kadar mesafede
-            target_relative_z = world_vec[1] * cos_yaw - world_vec[0] * sin_yaw
-            target_relative_x = world_vec[1] * sin_yaw + world_vec[0] * cos_yaw
+            target_relative_z = world_vec[0] * sin_yaw + world_vec[1] * cos_yaw
+            target_relative_x = world_vec[0] * cos_yaw - world_vec[1] * sin_yaw
             
             observation = np.array([
                 self.current_state.speed / 100.0,
@@ -144,8 +143,9 @@ class TMNFEnv(gym.Env):
         # 1. Aksiyonu oyuna gonder
         self._handle_action(action)
 
-        # AJANIN KARAR SURESI
-        time.sleep(0.05) 
+        # TMInterface plugin'i action.txt'yi 50ms'de bir yukluyor.
+        # Ajan da ayni ritimde karar verirse output dosyada ezilmeden oyuna gider.
+        time.sleep(self.action_interval) 
         self.step_count += 1
 
         # 2. Yeni durumu (gozlem) oyundan al
@@ -273,6 +273,8 @@ class TMNFEnv(gym.Env):
 
         # Oyunu yeniden baslat ve baslangicta tum tuslarin birakildigindan emin ol
         self.controller.send_command(["press delete", "rel up", "rel down"])
+        time.sleep(self.action_interval * 1.5)
+        self.controller.send_command(["rel delete", "rel up", "rel down", "steer 0"])
         
         time.sleep(0.5) 
 
