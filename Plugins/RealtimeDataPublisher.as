@@ -1,9 +1,8 @@
 // TMInterface Gercek Zamanli Veri Yayincisi
 // OnRunStep callback kullaniyor - Normal race modunda calisir!
 
-// AngelScript'ten Python'a veri gondermek icin bir kopru kurar.
-// RL ajaninin komutlari `Scripts/action.txt` dosyasina yazilir.
-// Bu plugin, oyuna periyodik olarak o dosyayi `load` komutuyla yukletir.
+// AngelScript'ten Python'a veri gondermek ve Python'dan input almak icin
+// TCP soket koprusu kurar.
 
 // PI sayisi
 const float PI = 3.14159256; // Daha hassas PI degeri
@@ -53,6 +52,72 @@ array<vec3> g_checkpointWorldCoords;
 vec3 g_finishWorldCoord;
 bool g_mapInfoLoaded = false;
 int g_lastRaceTime = -1; // YENI: Yarışın yeniden baslatildigini anlamak icin
+Net::Socket@ g_serverSocket = null;
+Net::Socket@ g_clientSocket = null;
+string g_socketReadBuffer = "";
+const string SOCKET_HOST = "127.0.0.1";
+const uint16 SOCKET_PORT = 8765;
+
+void DropSocket()
+{
+    @g_clientSocket = null;
+    g_socketReadBuffer = "";
+}
+
+void EnsureSocketServer()
+{
+    if (g_serverSocket !is null) return;
+
+    @g_serverSocket = Net::Socket();
+    if (g_serverSocket.Listen(SOCKET_HOST, SOCKET_PORT)) {
+        print("TCP koprusu dinliyor: " + SOCKET_HOST + ":" + SOCKET_PORT);
+    } else {
+        print("HATA: TCP koprusu portu acilamadi: " + SOCKET_HOST + ":" + SOCKET_PORT);
+        @g_serverSocket = null;
+    }
+}
+
+void ExecuteSocketCommandLine(string command)
+{
+    if (command.get_Length() > 0 && command[command.get_Length() - 1] == 13) {
+        command.Erase(command.get_Length() - 1, 1);
+    }
+    if (command.IsEmpty()) return;
+    ExecuteCommand(command, ExecuteCommandFlags::SuppressOutput);
+}
+
+void ProcessSocketCommands()
+{
+    if (g_clientSocket is null) return;
+
+    uint available = g_clientSocket.get_Available();
+    if (available == 0) return;
+
+    string chunk = g_clientSocket.ReadString(available);
+    if (chunk.IsEmpty()) {
+        DropSocket();
+        return;
+    }
+
+    g_socketReadBuffer += chunk;
+    int newlineIndex = g_socketReadBuffer.FindFirst("\n");
+    while (newlineIndex >= 0) {
+        string command = g_socketReadBuffer.Substr(0, newlineIndex);
+        g_socketReadBuffer.Erase(0, newlineIndex + 1);
+        ExecuteSocketCommandLine(command);
+        newlineIndex = g_socketReadBuffer.FindFirst("\n");
+    }
+}
+
+bool SendSocketState(const string&in data)
+{
+    if (g_clientSocket is null) return false;
+    if (!g_clientSocket.Write(data + "\n")) {
+        DropSocket();
+        return false;
+    }
+    return true;
+}
 
 void Main()
 {
@@ -76,10 +141,26 @@ void Main()
     RegisterVariable("rt_lap", 0);
     RegisterVariable("rt_data_csv", "");
     
+    EnsureSocketServer();
     print("Konsol degiskenleri kaydedildi!");
+    print("TCP koprusu: Python client bekleniyor.");
     print("UYARI: Sadece yaris modunda calisir!");
     print("Normal race modunda map yukleyip ENTER basin");
     print("===========================================");
+}
+
+void Render()
+{
+    EnsureSocketServer();
+    if (g_serverSocket is null || g_clientSocket !is null) return;
+
+    Net::Socket@ newSocket = g_serverSocket.Accept(0);
+    if (newSocket !is null) {
+        @g_clientSocket = newSocket;
+        g_clientSocket.set_NoDelay(true);
+        g_socketReadBuffer = "";
+        print("TCP koprusu baglandi: " + g_clientSocket.get_RemoteIP());
+    }
 }
 
 // Yaris basladiginda cagrilir - GUVENILIR DEGIL, KULLANILMIYOR
@@ -100,6 +181,8 @@ void OnRunStep(SimulationManager@ simManager)
 {
     // YENI: Yarışın yeniden baslatilip baslatilmadigini kontrol et
     int raceTime = simManager.RaceTime;
+    ProcessSocketCommands();
+
     if (raceTime < g_lastRaceTime) {
         print(">>> YARIS YENIDEN BASLATILDI! Harita tekrar taranacak. <<<");
         g_mapInfoLoaded = false; // Harita tarama bayragini sifirla
@@ -153,14 +236,6 @@ void OnRunStep(SimulationManager@ simManager)
         } else {
             print("HATA: Harita bilgisi alinamadi!");
         }
-    }
-
-    // --- KOMUT YUKLEME (YENI - DOSYA LOAD SISTEMI) ---
-    // Her 50ms'de bir, Python'un yazdigi action.txt dosyasini oyuna yukle.
-    // Bu, AngelScript'in dosya okumasina gerek kalmadan komutlari calistirir.
-    if (simManager.RaceTime % 50 == 0)
-    {
-        ExecuteCommand("load action.txt");
     }
 
     // Yaris baslamadiysa veya bittiyse gec
@@ -232,7 +307,7 @@ void OnRunStep(SimulationManager@ simManager)
     SetVariable("rt_roll", roll);  // Debug icin hala yazdiriliyor ama CSV'de yok
     SetVariable("rt_checkpoint", currentCP);
     SetVariable("rt_lap", currentLap);
-    // Veriyi panoya 50ms'de bir kopyala.
+    // Veriyi TCP soketten 50ms'de bir Python'a gonder.
     if (raceTime % 50 == 0)
     {
         string data = ""
@@ -247,7 +322,7 @@ void OnRunStep(SimulationManager@ simManager)
             + hasLateralContact;
 
         SetVariable("rt_data_csv", data);
-        IO::SetClipboard(data);
+        SendSocketState(data);
     }
     
     // DEBUG: Ilk saniyede veriyi goster
@@ -268,7 +343,11 @@ void OnRunStep(SimulationManager@ simManager)
         print("KESIN YAW (Radyan): " + yaw);
         print("Checkpoint: " + currentCP + " | Lap: " + currentLap);
         print("CSV: " + data);
-        print("Pano guncelleniyor!");
+        if (g_clientSocket !is null) {
+            print("TCP client bagli, veri gonderiliyor!");
+        } else {
+            print("TCP client yok, veri gonderilemiyor!");
+        }
     }
     
     // DEBUG: Her 5 saniyede bir

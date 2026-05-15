@@ -1,41 +1,38 @@
 """
 TMInterface Kontrolcusu
 
-Bu sinif, TMInterface komut satiri araci (CLI) uzerinden oyunla
-etkilesime gecer. Komut gonderme ve veri okuma islemlerini yonetir.
+Bu sinif, Python tarafindaki soket koprusu uzerinden oyuna komut gonderir.
 """
 import os
 import time
 
-# RL ajaninin komutlarinin yazilacagi dosyanin yolu
-# TMInterface'in `load` komutu bu dosyayi `Scripts` klasorunde arar.
+# Soket yokken debug icin kullanilan eski yedek dosya yolu.
 ACTION_FILE_PATH = "Scripts/action.txt"
 
 class TMInterfaceController:
-    def __init__(self):
+    def __init__(self, command_sender=None):
         """
-        Kontrolcu baslatildiginda Scripts klasorunun ve action.txt'nin
-        var oldugundan emin olur.
+        Kontrolcu baslatildiginda komut gonderme arayuzunu saklar.
+        Eski dosya tabanli yol sadece yedek olarak tutulur.
         """
+        self.command_sender = command_sender
         scripts_dir = os.path.dirname(ACTION_FILE_PATH)
         if not os.path.exists(scripts_dir):
             os.makedirs(scripts_dir)
         # Komut dosyasini baslangicta temizle
         with open(ACTION_FILE_PATH, "w") as f:
             f.write("steer 0") # Oyuna ilk komut olarak duz gitmeyi ver
-        print("[KONTROLCU] 'load' komutu tabanli kontrolcu baslatildi.")
-        print(f"[KONTROLCU] Komutlar '{ACTION_FILE_PATH}' dosyasina yazilacak.")
+        print("[KONTROLCU] Soket tabanli kontrolcu baslatildi.")
 
     def send_command(self, commands):
         """
-        Verilen komut listesini action.txt dosyasina yazar.
-        Her komut kendi satirina yazilir.
+        Verilen komut listesini oyuna gonderir.
         """
         try:
-            # Komutlarin basina bir zaman damgasi eklemek, `load` komutunun
-            # her seferinde calismasini saglayabilir.
-            # Not: Bu sistemde ayni anda birden fazla komut gonderildigi icin
-            # zaman damgasi (prefix) kullanmak sorun yaratabilir. Simdilik kaldirildi.
+            if self.command_sender:
+                return self.command_sender(commands)
+
+            # Debug/manuel test icin eski dosya yoluna dus.
             full_command = "\n".join(commands)
             with open(ACTION_FILE_PATH, "w") as f:
                 f.write(full_command)
@@ -45,15 +42,22 @@ class TMInterfaceController:
             return False
 
     def clear_actions(self):
-        """Egitim durdugunda aracin son komutta takili kalmamasi icin action.txt'yi temizler."""
+        """Egitim durdugunda aracin son komutta takili kalmamasi icin inputlari birakir."""
         try:
+            commands = ["steer 0", "rel up", "rel down", "rel delete"]
+            if self.command_sender:
+                sent = self.command_sender(commands)
+                if sent:
+                    print("[KONTROLCU] Egitim durdu, inputlar soketten birakildi.")
+                return sent
+
             # Basili kalabilecek tuslari acikca birak.
             with open(ACTION_FILE_PATH, "w") as f:
-                f.write("steer 0\nrel up\nrel down\nrel delete")
+                f.write("\n".join(commands))
             print("[KONTROLCU] Egitim durdu, inputlar birakildi.")
             return True
         except Exception as e:
-            print(f"[HATA] action.txt temizlenemedi: {e}")
+            print(f"[HATA] inputlar birakilamadi: {e}")
             return False
 
 if __name__ == '__main__':

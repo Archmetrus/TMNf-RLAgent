@@ -8,13 +8,13 @@ Proje, oyun ve Python arasında çift yönlü bir iletişim kurar:
 
 1.  **Veri Akışı (Oyun -> Python):**
     *   `Plugins/RealtimeDataPublisher.as` eklentisi, oyun içi verileri (hız, pozisyon, rotasyon, vb.) her karede toplar.
-    *   Bu verileri CSV formatında **PC Panosuna (Clipboard)** kopyalar.
-    *   Python tarafındaki arayüz panoyu dinler ve veriyi işler.
+    *   TCP soketini `127.0.0.1:8765` adresinde dinler; Python arayüzü buraya bağlanır.
+    *   Oyun verilerini CSV formatında aynı TCP bağlantısından Python'a yollar.
 
 2.  **Komut Akışı (Python -> Oyun):**
     *   RL Ajanı (veya manuel test), aksiyonları (gaz, fren, direksiyon) belirler.
-    *   Bu komutlar `Scripts/action.txt` dosyasına yazılır.
-    *   Oyun eklentisi, her 100ms'de bir bu dosyayı okuyarak (`load action.txt`) komutları uygular.
+    *   Komutlar aynı TCP soket üzerinden oyun eklentisine gönderilir.
+    *   Eklenti gelen komutları doğrudan TMInterface komutu olarak uygular.
 
 ## 📦 Kurulum
 
@@ -23,7 +23,7 @@ Proje, oyun ve Python arasında çift yönlü bir iletişim kurar:
 *   **Python 3.x**
 *   Gerekli Kütüphaneler:
     ```bash
-    pip install gymnasium stable-baselines3[extra] pyperclip
+    pip install gymnasium stable-baselines3[extra]
     ```
     *(Tkinter Python ile kurulu gelir, gelmezse ayrıca kurmanız gerekebilir)*
 
@@ -55,7 +55,7 @@ Proje, oyun ve Python arasında çift yönlü bir iletişim kurar:
 *   `tmnf_rl_ui.py`: Ana uygulama. Arayüzü, veri dinlemeyi ve eğitimi yönetir.
 *   `tmnf_env.py`: Gymnasium uyumlu RL ortamı (Ödül fonksiyonu, gözlem uzayı burada tanımlıdır).
 *   `tmnf_controller.py`: Oyuna komut gönderme mekanizması.
-*   `car_state.py`: Pano verisini işleyen sınıf.
+*   `car_state.py`: TCP'den gelen CSV verisini işleyen sınıf.
 *   `Plugins/RealtimeDataPublisher.as`: Oyun içi veri toplayıcı plugin scripti.
 
 ## ⚠️ Önemli Notlar

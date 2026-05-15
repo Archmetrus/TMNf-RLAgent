@@ -11,13 +11,13 @@ import sys
 import threading
 import queue
 import math
+import socket
 
 # Gerekli kutuphaneleri import et
 try:
-    import pyperclip
     import tkinter as tk
     from tkinter import ttk
-    from tkinter import font, messagebox
+    from tkinter import font, messagebox, filedialog
     from tmnf_env import TMNFEnv
     from car_state import CarState
     from stable_baselines3 import PPO
@@ -27,7 +27,7 @@ except ImportError as e:
     print(f"HATA: Gerekli bir modul bulunamadi! -> {e.name}")
     print("=" * 80)
     print("\nLutfen eksik modulleri yukleyin. Ornegin:")
-    print("  pip install pyperclip stable-baselines3[extra] gymnasium")
+    print("  pip install stable-baselines3[extra] gymnasium")
     print("=" * 80)
     sys.exit(1)
 
@@ -106,24 +106,35 @@ class App(tk.Tk):
             "reward_total": tk.StringVar(value="0.00"),
             "direction": tk.StringVar(value="--"),
             "step_count": tk.StringVar(value="Adim: 0"), # YENI: Adim sayaci
-            "contact": tk.StringVar(value="--") # YENI: Duvara temas icin
+            "contact": tk.StringVar(value="--"), # YENI: Duvara temas icin
+            "model_path": tk.StringVar(value="Model yok")
         }
 
         # Threading ve Egitim Yonetimi
         self.listener_running = False
         self.training_running = False
         self.training_should_stop = False
+        self.watch_running = False
+        self.watch_should_stop = False
         self.current_step_count = 0 # YENI: Adim sayisini saklamak icin
         self.data_queue = queue.Queue()
+        self.status_queue = queue.Queue()
         self.listener_thread = None
         self.training_thread = None
-        self.last_clipboard = ""
+        self.watch_thread = None
         self.frame_count = 0
         self.start_time = 0
         self.model = None
+        self.loaded_model_path = None
+        self.loaded_model_observation_shape = None
         self.env = None
         self.latest_car_state = None # En son gecerli araba durumunu saklamak icin
+        self.latest_state_wall_time = 0.0
         self.data_poll_interval_ms = 50
+        self.socket_host = "127.0.0.1"
+        self.socket_port = 8765
+        self.client_socket = None
+        self.socket_lock = threading.Lock()
 
         self.create_widgets()
         self.update_ui()
@@ -168,12 +179,21 @@ class App(tk.Tk):
         self.stop_button = ttk.Button(main_frame, text="Egitimi Durdur", command=self.stop_training, state="disabled")
         self.stop_button.grid(row=14, column=1, padx=5, pady=5, sticky="ew")
 
-        # Odul Gostergeleri (Kendi satirlarina alindi)
-        ttk.Label(main_frame, text="Anlik Odul/Ceza:").grid(row=15, column=0, sticky="w")
-        ttk.Label(main_frame, textvariable=self.data_vars["reward_current"]).grid(row=15, column=1, sticky="w")
+        self.load_model_button = ttk.Button(main_frame, text="Model Yukle", command=self.load_model)
+        self.load_model_button.grid(row=15, column=0, padx=5, pady=5, sticky="ew")
+        ttk.Label(main_frame, textvariable=self.data_vars["model_path"], style="Value.TLabel").grid(row=15, column=1, sticky="w")
 
-        ttk.Label(main_frame, text="Bolum Toplam Odulu:").grid(row=16, column=0, sticky="w")
-        ttk.Label(main_frame, textvariable=self.data_vars["reward_total"]).grid(row=16, column=1, sticky="w")
+        self.watch_button = ttk.Button(main_frame, text="Modeli Izle", command=self.start_watch, state="disabled")
+        self.watch_button.grid(row=16, column=0, padx=5, pady=5, sticky="ew")
+        self.stop_watch_button = ttk.Button(main_frame, text="Izlemeyi Durdur", command=self.stop_watch, state="disabled")
+        self.stop_watch_button.grid(row=16, column=1, padx=5, pady=5, sticky="ew")
+
+        # Odul Gostergeleri (Kendi satirlarina alindi)
+        ttk.Label(main_frame, text="Anlik Odul/Ceza:").grid(row=17, column=0, sticky="w")
+        ttk.Label(main_frame, textvariable=self.data_vars["reward_current"]).grid(row=17, column=1, sticky="w")
+
+        ttk.Label(main_frame, text="Bolum Toplam Odulu:").grid(row=18, column=0, sticky="w")
+        ttk.Label(main_frame, textvariable=self.data_vars["reward_total"]).grid(row=18, column=1, sticky="w")
 
         # --- Alt Durum Cubugu ---
         status_frame = ttk.Frame(self, padding=(10, 5))
@@ -201,6 +221,30 @@ class App(tk.Tk):
 
 
     # --- Egitim Fonksiyonlari ---
+    def has_live_data(self):
+        if not self.listener_running:
+            return False
+        if not self.latest_car_state or not self.latest_car_state.valid:
+            return False
+        with self.socket_lock:
+            socket_connected = self.client_socket is not None
+        return socket_connected and time.time() - self.latest_state_wall_time <= 1.0
+
+    def ensure_live_data_or_warn(self):
+        if not self.listener_running:
+            messagebox.showwarning("Veri yok", "Once Veri Izlemeyi Baslat'a basin.")
+            return False
+
+        if not self.latest_car_state or not self.latest_car_state.valid:
+            messagebox.showwarning("Veri yok", "Gecerli araba verisi gelmeden baslatilamaz.")
+            return False
+
+        if not self.has_live_data():
+            messagebox.showwarning("Veri yok", "Canli soket verisi gelmeden baslatilamaz.")
+            return False
+
+        return True
+
     def training_worker(self):
         """Egitimi ayri bir thread'de calistiran fonksiyon"""
         try:
@@ -258,14 +302,13 @@ class App(tk.Tk):
             
     def start_training(self):
         if not self.training_running:
-            if not self.listener_running:
-                messagebox.showwarning("Veri yok", "Once Veri Izlemeyi Baslat'a basin.")
+            if self.watch_running:
+                messagebox.showwarning("Izleme aktif", "Once model izlemeyi durdurun.")
                 return
 
-            if not self.latest_car_state or not self.latest_car_state.valid:
-                messagebox.showwarning("Veri yok", "Gecerli araba verisi gelmeden egitim baslatilamaz.")
+            if not self.ensure_live_data_or_warn():
                 return
-
+            
             # Oyuna baglanmadan once kullaniciyi uyar
             if not messagebox.askyesno("Egitimi Baslat", "Egitimi baslatmak uzeresiniz.\n\nTMInterface'in acik ve bir haritanin yuklu oldugundan emin olun.\n\nDevam edilsin mi?"):
                 return
@@ -293,8 +336,123 @@ class App(tk.Tk):
             self.start_button.config(state="disabled")
             self.stop_button.config(state="normal" if not self.training_should_stop else "disabled")
         else:
-            self.start_button.config(state="normal")
+            self.start_button.config(state="disabled" if self.watch_running else "normal")
             self.stop_button.config(state="disabled")
+
+        self.update_watch_buttons()
+
+    def load_model(self):
+        model_path = filedialog.askopenfilename(
+            title="PPO model sec",
+            initialdir=os.path.abspath("models"),
+            filetypes=[("Stable-Baselines3 model", "*.zip"), ("Tum dosyalar", "*.*")]
+        )
+        if not model_path:
+            return
+
+        self.loaded_model_path = model_path
+        self.loaded_model_observation_shape = None
+        self.data_vars["model_path"].set(os.path.basename(model_path))
+        self.set_training_status("Model yuklendi.", "idle")
+        self.update_watch_buttons()
+
+    def adapt_observation_for_model(self, observation):
+        if not self.model:
+            return observation
+
+        expected_shape = self.model.observation_space.shape
+        if observation.shape == expected_shape:
+            return observation
+
+        expected_size = expected_shape[0]
+        current_size = observation.shape[0]
+        if current_size > expected_size:
+            return observation[:expected_size]
+
+        if current_size < expected_size:
+            import numpy as np
+            padded = np.zeros(expected_shape, dtype=observation.dtype)
+            padded[:current_size] = observation
+            return padded
+
+        return observation
+
+    def watch_worker(self):
+        try:
+            self.set_training_status("Model yukleniyor...", "running")
+            self.env = TMNFEnv(ui_app=self)
+            self.model = PPO.load(self.loaded_model_path)
+            self.loaded_model_observation_shape = self.model.observation_space.shape
+
+            observation, _info = self.env.reset()
+            observation = self.adapt_observation_for_model(observation)
+            self.current_step_count = 0
+            self.set_training_status("Model izleniyor...", "running")
+
+            while not self.watch_should_stop:
+                action, _state = self.model.predict(observation, deterministic=True)
+                observation, _reward, terminated, truncated, _info = self.env.step(action)
+                observation = self.adapt_observation_for_model(observation)
+                self.current_step_count += 1
+
+                if terminated or truncated:
+                    observation, _info = self.env.reset()
+                    observation = self.adapt_observation_for_model(observation)
+
+            self.set_training_status("Model izleme durduruldu.", "stopped")
+        except Exception as e:
+            self.set_training_status(f"HATA: {e}", "stopped")
+        finally:
+            if self.env:
+                self.env.close()
+            self.watch_running = False
+            self.watch_should_stop = False
+            self.update_watch_buttons()
+            self.update_training_buttons()
+
+    def start_watch(self):
+        if self.watch_running:
+            return
+        if self.training_running:
+            messagebox.showwarning("Egitim aktif", "Once egitimi durdurun.")
+            return
+        if not self.loaded_model_path:
+            messagebox.showwarning("Model yok", "Once bir model yukleyin.")
+            return
+        if not self.ensure_live_data_or_warn():
+            return
+        if not messagebox.askyesno("Modeli Izle", "Yuklu model oyunu kontrol edecek.\n\nDevam edilsin mi?"):
+            return
+
+        self.data_vars["reward_current"].set("0.00")
+        self.data_vars["reward_total"].set("0.00")
+        self.data_vars["step_count"].set("Adim: 0")
+        self.current_step_count = 0
+        self.watch_running = True
+        self.watch_should_stop = False
+        self.update_watch_buttons()
+        self.update_training_buttons()
+        self.watch_thread = threading.Thread(target=self.watch_worker, daemon=True)
+        self.watch_thread.start()
+
+    def stop_watch(self):
+        if self.watch_running and not self.watch_should_stop:
+            self.watch_should_stop = True
+            self.set_training_status("Izleme durduruluyor...", "stopped")
+            self.stop_watch_button.config(state="disabled")
+
+    def update_watch_buttons(self):
+        if not hasattr(self, "watch_button"):
+            return
+        has_model = self.loaded_model_path is not None
+        if self.watch_running:
+            self.load_model_button.config(state="disabled")
+            self.watch_button.config(state="disabled")
+            self.stop_watch_button.config(state="normal" if not self.watch_should_stop else "disabled")
+        else:
+            self.load_model_button.config(state="normal" if not self.training_running else "disabled")
+            self.watch_button.config(state="normal" if has_model and not self.training_running else "disabled")
+            self.stop_watch_button.config(state="disabled")
 
     def set_training_status(self, message, status_type):
         self.data_vars["training_status"].set(message)
@@ -309,27 +467,83 @@ class App(tk.Tk):
             self.step_count_label.config(style="Status.Idle.TLabel") # Adim sayaci rengini de guncelle
 
 
-    # --- Pano Dinleyici Fonksiyonlari ---
-    def clipboard_worker(self):
-        # ... (Bu fonksiyon ayni kaliyor)
+    # --- Soket Dinleyici Fonksiyonlari ---
+    def socket_worker(self):
+        recv_buffer = ""
         while self.listener_running:
+            if self.client_socket is None:
+                try:
+                    self.queue_listener_status(f"Baglaniyor {self.socket_port}", "running")
+                    client = socket.create_connection((self.socket_host, self.socket_port), timeout=0.5)
+                    client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                    client.settimeout(0.2)
+                    with self.socket_lock:
+                        self.client_socket = client
+                    recv_buffer = ""
+                    self.queue_listener_status("Soket baglandi", "running")
+                except (OSError, ConnectionError):
+                    time.sleep(0.5)
+                    continue
+
             try:
-                current_clipboard = pyperclip.paste()
-                if current_clipboard and current_clipboard != self.last_clipboard and ',' in current_clipboard:
-                    self.last_clipboard = current_clipboard
-                    car_state = CarState(current_clipboard)
+                chunk = self.client_socket.recv(4096)
+                if not chunk:
+                    self._drop_socket_client()
+                    self.queue_listener_status("Soket koptu", "stopped")
+                    continue
+
+                recv_buffer += chunk.decode("utf-8", errors="ignore")
+                while "\n" in recv_buffer:
+                    line, recv_buffer = recv_buffer.split("\n", 1)
+                    line = line.strip()
+                    if not line:
+                        continue
+                    car_state = CarState(line)
                     if car_state.valid:
                         self.data_queue.put(car_state)
-            except Exception:
+                    else:
+                        self.queue_listener_status(f"Gecersiz veri: {line[:60]}", "stopped")
+            except socket.timeout:
+                continue
+            except OSError:
+                self._drop_socket_client()
+                self.queue_listener_status("Soket koptu", "stopped")
+
+        self._drop_socket_client()
+
+    def _drop_socket_client(self):
+        with self.socket_lock:
+            client = self.client_socket
+            self.client_socket = None
+        if client:
+            try:
+                client.close()
+            except OSError:
                 pass
-            time.sleep(self.data_poll_interval_ms / 1000.0)
+
+    def send_socket_command(self, commands):
+        payload = "\n".join(commands) + "\n"
+        with self.socket_lock:
+            client = self.client_socket
+            if client is None:
+                return False
+            try:
+                client.sendall(payload.encode("utf-8"))
+                return True
+            except OSError:
+                self.client_socket = None
+                try:
+                    client.close()
+                except OSError:
+                    pass
+                return False
 
     def start_listening(self):
         if not self.listener_running:
             self.listener_running = True
-            self.listener_thread = threading.Thread(target=self.clipboard_worker, daemon=True)
+            self.listener_thread = threading.Thread(target=self.socket_worker, daemon=True)
             self.listener_thread.start()
-            self.set_listener_status("Dinleniyor...", "running")
+            self.set_listener_status(f"Baglaniyor {self.socket_port}", "running")
             self.start_listener_button.config(state="disabled")
             self.stop_listener_button.config(state="normal")
             self.start_time = time.time()
@@ -338,6 +552,7 @@ class App(tk.Tk):
     def stop_listening(self):
         if self.listener_running:
             self.listener_running = False
+            self._drop_socket_client()
             self.set_listener_status("Durduruldu", "stopped")
             self.start_listener_button.config(state="normal")
             self.stop_listener_button.config(state="disabled")
@@ -349,12 +564,20 @@ class App(tk.Tk):
         else: # stopped
             self.listener_status_label.config(style="Status.Stopped.TLabel")
 
+    def queue_listener_status(self, message, status_type):
+        self.status_queue.put((message, status_type))
+
     def update_ui(self):
         """Arayuzu guncelleyen ana dongu."""
         try:
+            while not self.status_queue.empty():
+                message, status_type = self.status_queue.get()
+                self.set_listener_status(message, status_type)
+
             while not self.data_queue.empty():
                 car_state = self.data_queue.get()
                 self.latest_car_state = car_state # En son durumu guncelle
+                self.latest_state_wall_time = time.time()
                 
                 self.frame_count += 1
                 self.data_vars["time"].set(f"{car_state.time} ms")
@@ -382,8 +605,8 @@ class App(tk.Tk):
                 fps = self.frame_count / elapsed if elapsed > 0 else 0
                 self.data_vars["fps"].set(f"{fps:.1f} FPS")
 
-            # Egitim calisiyorsa ek bilgileri guncelle
-            if self.training_running and self.env:
+            # Egitim veya model izleme calisiyorsa ek bilgileri guncelle
+            if (self.training_running or self.watch_running) and self.env:
                 self.data_vars["reward_current"].set(f"{self.env.last_reward:.2f}")
                 self.data_vars["reward_total"].set(f"{self.env.total_reward:.2f}")
                 self.data_vars["step_count"].set(f"Adim: {self.current_step_count}")
@@ -400,6 +623,10 @@ class App(tk.Tk):
             self.stop_training()
             if self.training_thread:
                 self.training_thread.join(timeout=2) # Thread'in bitmesini bekle
+        if self.watch_running:
+            self.stop_watch()
+            if self.watch_thread:
+                self.watch_thread.join(timeout=2)
         self.destroy()
 
 if __name__ == "__main__":

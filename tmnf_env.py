@@ -2,7 +2,6 @@ import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
 import time
-# pyperclip artik burada kullanilmayacak.
 
 from tmnf_controller import TMInterfaceController
 from car_state import CarState
@@ -43,7 +42,7 @@ class TMNFEnv(gym.Env):
 
         # --- Episode Sonlandirma Degiskenleri ---
         self.step_count = 0
-        self.action_interval = 0.05        # TMInterface action.txt'yi 50ms'de bir yukluyor
+        self.action_interval = 0.05        # TCP koprusu 50ms ritminde calisiyor
         self.max_steps_per_episode = 2000  # ~100 saniye (2000 * 0.05s)
         self.low_speed_counter = 0
         self.low_speed_threshold = 60     # 60 adim (~3 sn) boyunca yavas kalirsa bitir
@@ -51,7 +50,7 @@ class TMNFEnv(gym.Env):
         self.backward_threshold = 40      # 40 adim (~2 sn) boyunca geri giderse bitir
 
         # --- Kontrolcu ---
-        self.controller = TMInterfaceController()
+        self.controller = TMInterfaceController(command_sender=self.app.send_socket_command)
         self.current_state = None
         # self.last_action = None # Bu artik dogrudan karsilastirilamaz
         print("[ORTAM] TMNF Ortami baslatildi.")
@@ -143,7 +142,7 @@ class TMNFEnv(gym.Env):
         # 1. Aksiyonu oyuna gonder
         self._handle_action(action)
 
-        # TMInterface plugin'i action.txt'yi 50ms'de bir yukluyor.
+        # TMInterface plugin'i TCP komutlarini 50ms ritminde isliyor.
         # Ajan da ayni ritimde karar verirse output dosyada ezilmeden oyuna gider.
         time.sleep(self.action_interval) 
         self.step_count += 1

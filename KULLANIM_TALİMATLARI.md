@@ -9,7 +9,7 @@ Bu belge, TMInterface ve Python tabanlı RL ajanını çalıştırmak için adı
 *   **Dil:** Python 3.10 veya üzeri
 *   **Kütüphaneler:**
     ```powershell
-    pip install gymnasium stable-baselines3[extra] pyperclip
+    pip install gymnasium stable-baselines3[extra]
     ```
 
 ---
@@ -61,7 +61,7 @@ Bu belge, TMInterface ve Python tabanlı RL ajanını çalıştırmak için adı
 
 ### "Gerekli bir modül bulunamadı" Hatası
 Python kütüphaneleri eksiktir. Terminalde şu komutu çalıştırın:
-`pip install gymnasium stable-baselines3[extra] pyperclip`
+`pip install gymnasium stable-baselines3[extra]`
 
 ### Veriler 0 Gözüküyor / Değişmiyor
 1.  Oyunda `RealtimeDataPublisher` plugininin aktif olduğundan emin olun.
