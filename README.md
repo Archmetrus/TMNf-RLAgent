@@ -30,6 +30,7 @@ Proje asagidaki parcalari kapsar:
 - Gymnasium ortam sinifi
 - PPO egitim sureci
 - Canli telemetri arayuzu
+- Gercek zamanli TCP trafik monitoru
 - Model kaydetme
 - Kayitli modeli yukleyip izleme
 - Checkpoint hedefi ve odul fonksiyonu ile surus davranisi sekillendirme
@@ -46,6 +47,7 @@ Goruntu tabanli surus yapilmaz. Ajan ekran pikseli islemez. Bunun yerine oyun mo
 4. Plugin her 50 ms'de bir arac verisini CSV satiri olarak Python'a yollar.
 5. Python `CarState` sinifi ile CSV verisini parse eder.
 6. UI hiz, konum, yaw, checkpoint, hedef checkpoint ve temas bilgisini gosterir.
+7. UI icindeki web monitor, gelen/giden TCP trafigini `127.0.0.1:8766` adresinden canli gosterir.
 
 ### Python -> Oyun komut akisi
 
@@ -60,6 +62,22 @@ Kullanilan eski yaklasimlar:
 - `Scripts/action.txt` dosyasini `load action.txt` ile surekli okutma: ana akista artik yok
 
 `action.txt` sadece eski debug/yedek yol olarak kodda durur; normal calismada kullanilmaz.
+
+### TCP trafik monitoru
+
+Python arayuzu acildiginda ek olarak kucuk bir web monitor baslatilir:
+
+```text
+http://127.0.0.1:8766
+```
+
+Bu sayfa 8765 uzerinden gecen gercek trafigi canli gosterir:
+
+- `OYUN -> PY`: pluginden Python'a gelen CSV state satirlari
+- `PY -> OYUN`: Python'dan plugine giden input komutlari
+- `SISTEM/HATA`: baglanti ve gonderim durumlari
+
+UI'daki web adresi tiklanabilir. Tiklaninca tarayicida monitor acilir.
 
 ## Veri Formati
 
@@ -80,6 +98,16 @@ Alanlar:
 - `lap`: tur bilgisi
 - `target_cp_x,target_cp_y,target_cp_z`: siradaki hedef checkpoint veya finish koordinati
 - `has_lateral_contact`: yan temas/duvar temasi, `0` veya `1`
+
+Checkpoint ve finish hedef koordinati plugin tarafinda blok koordinatindan hesaplanir:
+
+```text
+x = grid_x * 32 + 16
+y = grid_y * 8 + 8
+z = grid_z * 32 + 16
+```
+
+`y` degerinde `+8` kullanilir. Ornek: `grid_y = 1` ise hedef yukseklik `16` olur.
 
 ## Gozlem Uzayi
 
@@ -130,23 +158,30 @@ Donusum:
 
 Odul fonksiyonu birden fazla bilesenden olusur:
 
-### Ileri hiz odulu
+### Hedefe ilerleme odulu
 
-Aracin baktigi yone dogru hizi hesaplanir:
+Ajanin ana odulu aracin baktigi yone gore degil, hedef checkpoint'e yaklasip yaklasmadigina gore hesaplanir.
 
 ```python
-forward_vector = [sin(yaw), cos(yaw)]
-velocity_vector = [vel_x, vel_z]
-forward_speed = dot(velocity_vector, forward_vector)
+progress = last_distance_to_target - current_distance
+progress_clipped = clip(progress, -3.0, 3.0)
+progress_reward = progress_clipped
 ```
 
-Ileri hareket odullendirilir, geri hareket cezalandirilir:
+Hedeften uzaklasma daha sert cezalandirilir:
 
 ```python
-if forward_speed > 0:
-    reward_forward = (forward_speed / 5.0) ** 2
-else:
-    reward_forward = -((forward_speed / 5.0) ** 2)
+backward_penalty = progress_clipped * 2.0 if progress_clipped < 0 else 0.0
+```
+
+Bu sayede ajan sadece hizlanmayi degil, checkpoint'e dogru ilerlemeyi ogrenir.
+
+### Kucuk ileri hiz destegi
+
+Ileri hiz tamamen kaldirilmadi, fakat ana odulu ezmeyecek kadar kucuk tutuldu:
+
+```python
+forward_speed_bonus = clip(forward_speed, 0.0, 80.0) * 0.01
 ```
 
 ### Zaman cezasi
@@ -154,7 +189,7 @@ else:
 Her adimda kucuk zaman cezasi vardir:
 
 ```python
-time_penalty = -0.1
+time_penalty = -0.03
 ```
 
 Bu, ajani daha hizli ilerlemeye zorlar.
@@ -166,7 +201,7 @@ Aracin baktigi yon ile hareket ettigi yon arasindaki aci buyudukce ceza artar:
 ```python
 cos_angle = forward_speed / horizontal_speed
 angle_rad = arccos(cos_angle)
-consistency_penalty = - (angle_rad / pi) ** 2
+consistency_penalty = -0.3 * (angle_rad / pi) ** 2
 ```
 
 ### Checkpoint bonusu
@@ -179,15 +214,36 @@ checkpoint_bonus = 50.0
 
 Checkpoint degistigi anda hedef mesafesi resetlenir. Boylece ajan yeni checkpoint daha uzakta diye yanlis negatif distance cezasi yemez.
 
-### Hedefe yaklasma odulu
+### Temas cezasi
 
-Ajan hedef checkpoint'e yaklastikca odul alir:
+Arac yan temas/duvar temasi yaparsa ceza alir:
 
 ```python
-distance_reward = (last_distance_to_target - current_distance) * 0.5
+contact_penalty = -2.0
 ```
 
-Checkpoint gecildigi adimda bu bilesen sifirlanir ve yeni hedef icin baseline yeniden kurulur.
+### Aksiyon yumusakligi cezasi
+
+Ajanin direksiyon/gaz kararlarini asiri sert degistirmesi kucuk ceza alir:
+
+```python
+action_smoothness_penalty = -0.02 * norm(action - last_action)
+```
+
+Toplam odul bu bilesenlerin toplami olarak hesaplanir:
+
+```python
+reward = (
+    progress_reward
+    + backward_penalty
+    + forward_speed_bonus
+    + time_penalty
+    + consistency_penalty
+    + checkpoint_bonus
+    + contact_penalty
+    + action_smoothness_penalty
+)
+```
 
 ## Episode Sonlandirma
 
@@ -195,7 +251,8 @@ Bir episode su durumlarda biter:
 
 - Maksimum adim siniri: `2000` adim, yaklasik 100 saniye
 - Dusuk hiz: 60 adim boyunca hiz `< 2.0`
-- Geri gitme: 40 adim boyunca `forward_speed < -1.0`
+- Hedeften uzaklasma: 40 adim boyunca checkpoint mesafesi artarsa
+- Ilerleme yok: 80 adim boyunca checkpoint'e anlamli yaklasma olmazsa
 
 Bu kurallar ajanin uzun sure takili kalmasini veya geri gitme davranisini surdurmesini engeller.
 
@@ -219,7 +276,41 @@ ent_coef = 0.01
 total_timesteps = 100000
 ```
 
-Egitim sonunda model `models/PPO-<timestamp>/` klasorune kaydedilir.
+Egitim normal tamamlanirsa model su klasore kaydedilir:
+
+```text
+models/PPO-<timestamp>/final_model.zip
+```
+
+Egitim `Egitimi Durdur` butonu ile durdurulursa UI model klasoru icin isim sorar.
+
+- Isim yazilirsa: `models/<girilen_isim>/manual_save_<timestamp>.zip`
+- Bos birakilip Tamam'a basilirsa: `models/PPO-<timestamp>/manual_save_<timestamp>.zip`
+- Iptal edilirse: default klasor kullanilir
+
+### TensorBoard loglari
+
+Egitim loglari `logs/` klasorune yazilir. Bu klasor model degildir; egitim grafigi icindir.
+
+Bakmak icin:
+
+```powershell
+tensorboard --logdir logs
+```
+
+Sonra:
+
+```text
+http://localhost:6006
+```
+
+En onemli grafikler:
+
+- `rollout/ep_rew_mean`: odul artiyor mu?
+- `rollout/ep_len_mean`: episode suresi uzuyor mu?
+- `train/value_loss`: deger agi patliyor mu?
+- `train/entropy_loss`: kesif cok erken bitiyor mu?
+- `train/approx_kl`: PPO fazla agresif mi?
 
 ## Model Yukleme ve Izleme
 
@@ -252,6 +343,7 @@ Arayuz bolumleri:
 - `Calisma`: soket durumu, egitim/izleme durumu, adim sayisi, FPS
 - `Canli Telemetri`: oyun verilerini gosterir
 - `Egitim ve Model`: egitim baslat/durdur, model yukle/izle, odul bilgileri
+- `Web` linki: canli TCP trafik monitorunu acar
 
 ## Kurulum
 
@@ -307,6 +399,31 @@ python .\tmnf_rl_ui.py
 6. Oyunda bir race baslatin.
 7. Telemetri degerlerinin aktigini kontrol edin.
 8. Egitim icin `Egitimi Baslat`, model izlemek icin `Model Yukle` + `Modeli Izle` kullanin.
+9. TCP trafigini izlemek icin UI'daki web linkine tiklayin veya `http://127.0.0.1:8766` adresini acin.
+
+## Egitim Pisti Tavsiyesi
+
+Ilk egitim icin checkpoint araliklari kisa tutulmalidir. CP arasi cok uzunsa ajan odulu seyrek alir ve yon bulmakta zorlanir.
+
+Baslangic icin:
+
+```text
+CP arasi: 20-30 metre
+```
+
+Biraz daha genel aralik:
+
+```text
+CP arasi: 20-60 metre
+```
+
+Once duz veya az virajli pistte su davranis ogretilmelidir:
+
+```text
+gaz ver -> hedefe yaklas -> checkpoint gec
+```
+
+Ajan bunu ogrendikten sonra CP araligi ve pist zorlugu artirilabilir.
 
 ## Dosya Yapisi
 
@@ -379,13 +496,16 @@ Guncel sistem hedef checkpoint'in dunya koordinatini alir, sonra bunu aracin yer
 
 Rapor sablonunda belirtilen odul bilesenleri guncel projede vardir:
 
-- ileri hiz odulu
-- hedefe yaklasma odulu
+- hedef checkpoint'e ilerleme odulu
+- hedeften uzaklasma cezasi
+- kucuk ileri hiz destegi
 - checkpoint bonusu
 - savrulma cezasi
 - zaman cezasi
+- temas cezasi
+- aksiyon yumusakligi cezasi
 
-Checkpoint bonusu `50.0` olarak tutulur. Hedefe yaklasma carpanı `0.5` olarak kullanilir. Checkpoint gecildiginde distance baseline resetlenir.
+Checkpoint bonusu `50.0` olarak tutulur. Ana yonlendirme artik `last_distance_to_target - current_distance` ilerleme farki ile yapilir. Checkpoint gecildiginde distance baseline resetlenir.
 
 ### Model izleme
 
@@ -399,8 +519,10 @@ Guncel sistemde:
 - Oyun motorundan canli veri alinabilmektedir.
 - PPO modeli egitilebilmektedir.
 - Egitilen modeller `models/` altina kaydedilebilmektedir.
+- Egitim durdurulurken model klasor adi kullanicidan alinabilmektedir.
 - Kayitli modeller arayuzden secilip izlenebilmektedir.
 - Eski 4 observation'li modeller izleme modunda uyumluluk icin desteklenmektedir.
+- Web trafik monitoru ile gelen/giden TCP satirlari canli izlenebilmektedir.
 
 Bilinen nokta:
 
