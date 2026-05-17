@@ -12,12 +12,16 @@ import threading
 import queue
 import math
 import socket
+import json
+import webbrowser
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlparse
 
 # Gerekli kutuphaneleri import et
 try:
     import tkinter as tk
     from tkinter import ttk
-    from tkinter import font, messagebox, filedialog
+    from tkinter import font, messagebox, filedialog, simpledialog
     from tmnf_env import TMNFEnv
     from car_state import CarState
     from stable_baselines3 import PPO
@@ -52,6 +56,239 @@ class StopTrainingCallback(BaseCallback):
         # App icindeki bayrak (flag) kontrol edilir.
         # Eger bayrak True ise, egitimi durdur (False dondur).
         return not self.app.training_should_stop
+
+
+TRAFFIC_MONITOR_HTML = r"""<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TMNF TCP Trafik Monitoru</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #15181c;
+      --panel: #22272e;
+      --line: #353c45;
+      --text: #eef2f5;
+      --muted: #9aa7b4;
+      --in: #50d890;
+      --out: #69a7ff;
+      --sys: #ffc857;
+      --bad: #ff6b6b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.45 "Segoe UI", system-ui, sans-serif;
+    }
+    header, main { max-width: 1200px; margin: 0 auto; padding: 18px; }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      border-bottom: 1px solid var(--line);
+    }
+    h1 { margin: 0; font-size: 22px; }
+    .status { color: var(--sys); font-family: Consolas, monospace; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+    }
+    .label { color: var(--muted); font-size: 12px; }
+    .value { margin-top: 4px; font: 20px Consolas, monospace; }
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin: 12px 0;
+      flex-wrap: wrap;
+    }
+    button, input {
+      background: #2d333b;
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font: inherit;
+    }
+    button.active { border-color: var(--out); color: white; }
+    input { min-width: 260px; flex: 1; }
+    .log {
+      height: calc(100vh - 260px);
+      min-height: 360px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      background: #101317;
+      border-radius: 8px;
+    }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid #252b32; vertical-align: top; }
+    th { position: sticky; top: 0; background: #1b2026; color: var(--muted); text-align: left; }
+    .time { width: 110px; color: var(--muted); font-family: Consolas, monospace; }
+    .dir { width: 120px; font-weight: 700; }
+    .payload { font-family: Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .in { color: var(--in); }
+    .out { color: var(--out); }
+    .system { color: var(--sys); }
+    .error { color: var(--bad); }
+    @media (max-width: 760px) {
+      header { align-items: flex-start; flex-direction: column; }
+      .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .dir { width: 90px; }
+      .time { width: 92px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>TMNF TCP Trafik Monitoru</h1>
+      <div class="label">Plugin portu: 127.0.0.1:8765 | Web monitor: 127.0.0.1:8766</div>
+    </div>
+    <div id="status" class="status">baglaniyor</div>
+  </header>
+  <main>
+    <section class="grid">
+      <div class="card"><div class="label">Gelen</div><div id="inCount" class="value in">0</div></div>
+      <div class="card"><div class="label">Giden</div><div id="outCount" class="value out">0</div></div>
+      <div class="card"><div class="label">Toplam</div><div id="totalCount" class="value">0</div></div>
+      <div class="card"><div class="label">Son veri</div><div id="lastSeen" class="value">--</div></div>
+    </section>
+    <div class="toolbar">
+      <button data-filter="all" class="active">Hepsi</button>
+      <button data-filter="in">Gelen</button>
+      <button data-filter="out">Giden</button>
+      <button data-filter="system">Sistem</button>
+      <button id="clearBtn">Temizle</button>
+      <input id="search" placeholder="Filtrele: steer, checkpoint, 1000..." autocomplete="off">
+    </div>
+    <section class="log">
+      <table>
+        <thead><tr><th class="time">Saat</th><th class="dir">Yon</th><th>Veri</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </section>
+  </main>
+  <script>
+    const rows = document.getElementById("rows");
+    const statusEl = document.getElementById("status");
+    const searchEl = document.getElementById("search");
+    const counts = { in: 0, out: 0, system: 0, error: 0 };
+    let activeFilter = "all";
+    let total = 0;
+    const maxRows = 500;
+
+    function label(direction) {
+      if (direction === "in") return "OYUN -> PY";
+      if (direction === "out") return "PY -> OYUN";
+      if (direction === "error") return "HATA";
+      return "SISTEM";
+    }
+
+    function applyFilters() {
+      const q = searchEl.value.toLowerCase();
+      for (const tr of rows.children) {
+        const dirOk = activeFilter === "all" || tr.dataset.direction === activeFilter;
+        const textOk = !q || tr.dataset.text.includes(q);
+        tr.style.display = dirOk && textOk ? "" : "none";
+      }
+    }
+
+    function addEvent(item) {
+      const tr = document.createElement("tr");
+      tr.dataset.direction = item.direction;
+      tr.dataset.text = `${item.direction} ${item.payload}`.toLowerCase();
+      tr.innerHTML = `<td class="time">${item.time}</td><td class="dir ${item.direction}">${label(item.direction)}</td><td class="payload"></td>`;
+      tr.querySelector(".payload").textContent = item.payload;
+      rows.prepend(tr);
+      while (rows.children.length > maxRows) rows.lastElementChild.remove();
+
+      counts[item.direction] = (counts[item.direction] || 0) + 1;
+      if (item.direction === "in") document.getElementById("inCount").textContent = counts.in;
+      if (item.direction === "out") document.getElementById("outCount").textContent = counts.out;
+      total += 1;
+      document.getElementById("totalCount").textContent = total;
+      document.getElementById("lastSeen").textContent = item.time;
+      applyFilters();
+    }
+
+    document.querySelectorAll("button[data-filter]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll("button[data-filter]").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        activeFilter = btn.dataset.filter;
+        applyFilters();
+      });
+    });
+    document.getElementById("clearBtn").addEventListener("click", () => rows.textContent = "");
+    searchEl.addEventListener("input", applyFilters);
+
+    const es = new EventSource("/events");
+    es.onopen = () => { statusEl.textContent = "canli"; statusEl.style.color = "var(--in)"; };
+    es.onerror = () => { statusEl.textContent = "baglanti bekleniyor"; statusEl.style.color = "var(--bad)"; };
+    es.addEventListener("traffic", e => addEvent(JSON.parse(e.data)));
+  </script>
+</body>
+</html>
+"""
+
+
+class TrafficMonitorHandler(BaseHTTPRequestHandler):
+    def log_message(self, format, *args):
+        return
+
+    def do_GET(self):
+        parsed = urlparse(self.path)
+        if parsed.path == "/events":
+            self._serve_events()
+        else:
+            self._serve_page()
+
+    def _serve_page(self):
+        body = TRAFFIC_MONITOR_HTML.encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _serve_events(self):
+        app = self.server.app
+        last_id = max(0, app.get_latest_traffic_id() - 200)
+        try:
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Connection", "keep-alive")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+
+            while not app.web_monitor_stop.is_set():
+                events = app.get_traffic_events_after(last_id)
+                if events:
+                    for event in events:
+                        last_id = event["id"]
+                        data = json.dumps(event, ensure_ascii=False)
+                        self.wfile.write(f"id: {last_id}\nevent: traffic\ndata: {data}\n\n".encode("utf-8"))
+                    self.wfile.flush()
+                else:
+                    self.wfile.write(b": ping\n\n")
+                    self.wfile.flush()
+                    time.sleep(0.25)
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            return
 
 
 class App(tk.Tk):
@@ -139,6 +376,7 @@ class App(tk.Tk):
         self.loaded_model_path = None
         self.loaded_model_observation_shape = None
         self.env = None
+        self.manual_save_folder_name = None
         self.latest_car_state = None # En son gecerli araba durumunu saklamak icin
         self.latest_state_wall_time = 0.0
         self.data_poll_interval_ms = 50
@@ -146,8 +384,17 @@ class App(tk.Tk):
         self.socket_port = 8765
         self.client_socket = None
         self.socket_lock = threading.Lock()
+        self.web_monitor_host = "127.0.0.1"
+        self.web_monitor_port = 8766
+        self.web_monitor_server = None
+        self.web_monitor_thread = None
+        self.web_monitor_stop = threading.Event()
+        self.traffic_lock = threading.Lock()
+        self.traffic_events = []
+        self.traffic_next_id = 1
 
         self.create_widgets()
+        self.start_web_monitor()
         self.update_ui()
 
     def create_widgets(self):
@@ -174,6 +421,15 @@ class App(tk.Tk):
         ttk.Label(connection_frame, text="Soket:", style="Muted.TLabel").grid(row=1, column=0, sticky="w", pady=(10, 0))
         self.listener_status_label = ttk.Label(connection_frame, textvariable=self.data_vars["listener_status"], style="Status.Idle.TLabel")
         self.listener_status_label.grid(row=1, column=1, sticky="e", pady=(10, 0))
+        ttk.Label(connection_frame, text="Web:", style="Muted.TLabel").grid(row=2, column=0, sticky="w", pady=(6, 0))
+        self.web_monitor_link = ttk.Label(
+            connection_frame,
+            text=f"http://127.0.0.1:{self.web_monitor_port}",
+            style="Value.TLabel",
+            cursor="hand2"
+        )
+        self.web_monitor_link.grid(row=2, column=1, sticky="e", pady=(6, 0))
+        self.web_monitor_link.bind("<Button-1>", lambda _event: self.open_web_monitor())
 
         run_frame = ttk.LabelFrame(main_frame, text="Calisma", padding=12, style="Panel.TLabelframe")
         run_frame.grid(row=1, column=1, sticky="ew", padx=(8, 0), pady=(0, 12))
@@ -277,9 +533,8 @@ class App(tk.Tk):
             self.env = TMNFEnv(ui_app=self)
             
             # Model ve log klasorlerini olustur
-            models_dir = f"models/PPO-{int(time.time())}"
+            default_models_dir = f"models/PPO-{int(time.time())}"
             logdir = "logs"
-            if not os.path.exists(models_dir): os.makedirs(models_dir)
             if not os.path.exists(logdir): os.makedirs(logdir)
                 
             # YENI: Ince ayar yapilmis hiperparametreler
@@ -311,9 +566,13 @@ class App(tk.Tk):
             # Egitim bittiginde (dongu tamamlandiginda veya durduruldugunda)
             if self.training_should_stop:
                 self.set_training_status("Egitim kullanici tarafindan durduruldu.", "stopped")
+                models_dir = self.get_manual_save_dir(default_models_dir)
+                if not os.path.exists(models_dir): os.makedirs(models_dir)
                 self.model.save(f"{models_dir}/manual_save_{int(time.time())}")
             else:
                 self.set_training_status("Egitim tamamlandi.", "idle")
+                models_dir = default_models_dir
+                if not os.path.exists(models_dir): os.makedirs(models_dir)
                 self.model.save(f"{models_dir}/final_model")
                 
         except Exception as e:
@@ -345,15 +604,40 @@ class App(tk.Tk):
 
             self.training_running = True
             self.training_should_stop = False
+            self.manual_save_folder_name = None
             self.update_training_buttons()
             self.training_thread = threading.Thread(target=self.training_worker, daemon=True)
             self.training_thread.start()
 
     def stop_training(self):
         if self.training_running and not self.training_should_stop:
+            folder_name = simpledialog.askstring(
+                "Model klasoru",
+                "Model hangi klasore kaydedilsin?\n\nBos birakirsan default isim kullanilir."
+            )
+            self.manual_save_folder_name = self.sanitize_model_folder_name(folder_name)
             self.training_should_stop = True
             self.set_training_status("Durduruluyor...", "stopped")
             self.stop_button.config(state="disabled")
+
+    def sanitize_model_folder_name(self, folder_name):
+        if not folder_name:
+            return None
+
+        cleaned = folder_name.strip()
+        if not cleaned:
+            return None
+
+        invalid_chars = '<>:"/\\|?*'
+        for char in invalid_chars:
+            cleaned = cleaned.replace(char, "_")
+        cleaned = cleaned.rstrip(". ")
+        return cleaned or None
+
+    def get_manual_save_dir(self, default_models_dir):
+        if self.manual_save_folder_name:
+            return os.path.join("models", self.manual_save_folder_name)
+        return default_models_dir
 
     def update_training_buttons(self):
         if self.training_running:
@@ -490,6 +774,54 @@ class App(tk.Tk):
             self.training_status_label.config(style="Status.Idle.TLabel")
             self.step_count_label.config(style="Status.Idle.TLabel") # Adim sayaci rengini de guncelle
 
+    # --- Web Trafik Monitoru ---
+    def start_web_monitor(self):
+        if self.web_monitor_server is not None:
+            return
+        try:
+            server = ThreadingHTTPServer((self.web_monitor_host, self.web_monitor_port), TrafficMonitorHandler)
+            server.app = self
+            self.web_monitor_server = server
+            self.web_monitor_stop.clear()
+            self.web_monitor_thread = threading.Thread(target=server.serve_forever, daemon=True)
+            self.web_monitor_thread.start()
+            self.record_traffic("system", f"Web monitor hazir: http://{self.web_monitor_host}:{self.web_monitor_port}")
+            print(f"[WEB] Trafik monitoru: http://{self.web_monitor_host}:{self.web_monitor_port}")
+        except OSError as e:
+            self.record_traffic("error", f"Web monitor acilamadi: {e}")
+            print(f"[WEB] Trafik monitoru acilamadi: {e}")
+
+    def open_web_monitor(self):
+        webbrowser.open(f"http://{self.web_monitor_host}:{self.web_monitor_port}")
+
+    def stop_web_monitor(self):
+        self.web_monitor_stop.set()
+        if self.web_monitor_server is not None:
+            self.web_monitor_server.shutdown()
+            self.web_monitor_server.server_close()
+            self.web_monitor_server = None
+
+    def record_traffic(self, direction, payload):
+        now = time.strftime("%H:%M:%S")
+        with self.traffic_lock:
+            event = {
+                "id": self.traffic_next_id,
+                "time": now,
+                "direction": direction,
+                "payload": str(payload)
+            }
+            self.traffic_next_id += 1
+            self.traffic_events.append(event)
+            if len(self.traffic_events) > 2000:
+                self.traffic_events = self.traffic_events[-2000:]
+
+    def get_latest_traffic_id(self):
+        with self.traffic_lock:
+            return self.traffic_next_id - 1
+
+    def get_traffic_events_after(self, event_id):
+        with self.traffic_lock:
+            return [event.copy() for event in self.traffic_events if event["id"] > event_id]
 
     # --- Soket Dinleyici Fonksiyonlari ---
     def socket_worker(self):
@@ -505,6 +837,7 @@ class App(tk.Tk):
                         self.client_socket = client
                     recv_buffer = ""
                     self.queue_listener_status("Soket baglandi", "running")
+                    self.record_traffic("system", f"8765 baglandi: {self.socket_host}:{self.socket_port}")
                 except (OSError, ConnectionError):
                     time.sleep(0.5)
                     continue
@@ -522,6 +855,7 @@ class App(tk.Tk):
                     line = line.strip()
                     if not line:
                         continue
+                    self.record_traffic("in", line)
                     car_state = CarState(line)
                     if car_state.valid:
                         self.data_queue.put(car_state)
@@ -544,15 +878,18 @@ class App(tk.Tk):
                 client.close()
             except OSError:
                 pass
+            self.record_traffic("system", "8765 baglantisi kapandi")
 
     def send_socket_command(self, commands):
         payload = "\n".join(commands) + "\n"
         with self.socket_lock:
             client = self.client_socket
             if client is None:
+                self.record_traffic("error", "Komut gonderilemedi: 8765 bagli degil")
                 return False
             try:
                 client.sendall(payload.encode("utf-8"))
+                self.record_traffic("out", payload.strip())
                 return True
             except OSError:
                 self.client_socket = None
@@ -560,6 +897,7 @@ class App(tk.Tk):
                     client.close()
                 except OSError:
                     pass
+                self.record_traffic("error", "Komut gonderilirken soket koptu")
                 return False
 
     def start_listening(self):
@@ -643,6 +981,7 @@ class App(tk.Tk):
     def on_closing(self):
         # Tum thread'leri durdur
         self.stop_listening()
+        self.stop_web_monitor()
         if self.training_running:
             self.stop_training()
             if self.training_thread:

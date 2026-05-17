@@ -48,11 +48,14 @@ class TMNFEnv(gym.Env):
         self.low_speed_threshold = 60     # 60 adim (~3 sn) boyunca yavas kalirsa bitir
         self.backward_counter = 0
         self.backward_threshold = 40      # 40 adim (~2 sn) boyunca geri giderse bitir
+        self.no_progress_counter = 0
+        self.no_progress_threshold = 80   # 80 adim (~4 sn) hedefe yaklasamazsa bitir
+        self.no_progress_epsilon = 0.05
 
         # --- Kontrolcu ---
         self.controller = TMInterfaceController(command_sender=self.app.send_socket_command)
         self.current_state = None
-        # self.last_action = None # Bu artik dogrudan karsilastirilamaz
+        self.last_action = np.zeros(self.action_space.shape, dtype=np.float32)
         print("[ORTAM] TMNF Ortami baslatildi.")
 
 
@@ -139,8 +142,10 @@ class TMNFEnv(gym.Env):
         """
         Ajanin bir aksiyonunu isler.
         """
+        action_array = np.asarray(action, dtype=np.float32)
+
         # 1. Aksiyonu oyuna gonder
-        self._handle_action(action)
+        self._handle_action(action_array)
 
         # TMInterface plugin'i TCP komutlarini 50ms ritminde isliyor.
         # Ajan da ayni ritimde karar verirse output dosyada ezilmeden oyuna gider.
@@ -150,35 +155,50 @@ class TMNFEnv(gym.Env):
         # 2. Yeni durumu (gozlem) oyundan al
         observation = self._get_observation()
 
-        # 3. ODUL HESAPLAMA (YENIDEN AKTIF)
-        # Ajan, sadece ileri yondeki hizina gore odullendirilir.
-        reward = 0
+        # 3. ODUL HESAPLAMA
+        # Ana hedef: arabayi sadece kendi onune gitmeye degil, checkpoint'e yaklasmaya zorlamak.
+        reward = 0.0
+        progress = 0.0
+        checkpoint_changed = False
         if self.current_state and self.current_state.valid:
-            # Ileri yon hizi artik dogrudan CarState nesnesinden okunuyor.
             forward_speed = self.current_state.forward_speed
             
             # YON BILGISINI GUNCELLE
             self.car_direction = self.current_state.direction
 
-            # --- ODUL MANTIGI (GELISTIRILDI) ---
+            # 1. Checkpoint bonusu
+            checkpoint_bonus = 0.0
+            current_cp_count = self.current_state.checkpoint
+            checkpoint_changed = current_cp_count > self.last_checkpoint_count
+            if checkpoint_changed:
+                checkpoint_bonus = 50.0
+                print(f"[ODUL] Checkpoint gecildi! +{checkpoint_bonus} bonus!")
+            self.last_checkpoint_count = current_cp_count
 
-            # 1. Ana Odul/Ceza: Ileri gitmeye dayali.
-            # Ileri hareket ussel olarak odullendirilir,
-            # Geri hareket ise cok daha siddetli bir sekilde ussel olarak cezalandirilir.
-            reward_forward = 0
-            scaling_factor = 5.0
-            if forward_speed > 0:
-                reward_forward = (forward_speed / scaling_factor) ** 2
+            # 2. Ana odul: hedef checkpoint'e yaklasma
+            current_pos = np.array([self.current_state.pos_x, self.current_state.pos_y, self.current_state.pos_z])
+            target_pos = np.array([self.current_state.target_cp_x, self.current_state.target_cp_y, self.current_state.target_cp_z])
+            current_distance = np.linalg.norm(current_pos - target_pos)
+            
+            if self.last_distance_to_target == float('inf') or checkpoint_changed:
+                progress = 0.0
             else:
-                reward_forward = -((forward_speed / scaling_factor) ** 2)
+                progress = self.last_distance_to_target - current_distance
+            self.last_distance_to_target = current_distance
 
-            # 2. YENI Ceza: Zaman Cezasi
-            # Ajanin hedefe hizli ulasmasini tesvik etmek icin her adimda kucuk bir ceza.
-            time_penalty = -0.1
+            progress_clipped = float(np.clip(progress, -3.0, 3.0))
+            progress_reward = progress_clipped
+            backward_penalty = progress_clipped * 2.0 if progress_clipped < 0.0 else 0.0
 
-            # 3. YENI Ceza: Savrulma (Tutarlilik) Cezasi
+            # 3. Kucuk hiz destegi: checkpoint ilerlemesinin onune gecmeyecek kadar sinirli.
+            forward_speed_bonus = float(np.clip(forward_speed, 0.0, 80.0) * 0.01)
+
+            # 4. Zaman cezasi
+            time_penalty = -0.03
+
+            # 5. Savrulma (Tutarlilik) Cezasi
             # Arabanin yonu ile hareket yonu arasindaki aciyi cezalandirir.
-            consistency_penalty = 0
+            consistency_penalty = 0.0
             # Sadece arac hareket ediyorsa hesapla (sifira bolme hatasini onle)
             horizontal_speed = np.linalg.norm([self.current_state.vel_x, self.current_state.vel_z])
             if horizontal_speed > 1.0:
@@ -192,38 +212,25 @@ class TMNFEnv(gym.Env):
                 # Aci ne kadar buyukse, ceza o kadar artar (0'dan 1'e).
                 # Aciyi pi'ye bolerek normalize ediyoruz ve karesini alarak kucuk sapmalari
                 # daha az, buyuk sapmalari daha cok cezalandiriyoruz.
-                consistency_penalty = - (angle_rad / np.pi) ** 2
-            
-            # --- YENI ODULLER ---
+                consistency_penalty = -0.3 * (angle_rad / np.pi) ** 2
 
-            # 4. YENI Odul: Checkpoint Bonusu
-            checkpoint_bonus = 0
-            current_cp_count = self.current_state.checkpoint
-            checkpoint_changed = current_cp_count > self.last_checkpoint_count
-            if checkpoint_changed:
-                checkpoint_bonus = 50.0
-                print(f"[ODUL] Checkpoint gecildi! +{checkpoint_bonus} bonus!")
-            self.last_checkpoint_count = current_cp_count
+            # 6. Duvar/yan temas cezasi
+            contact_penalty = -2.0 if self.current_state.has_lateral_contact else 0.0
 
-            # 5. YENI Odul: Hedefe Yaklasma Odulu
-            distance_reward = 0
-            current_pos = np.array([self.current_state.pos_x, self.current_state.pos_y, self.current_state.pos_z])
-            target_pos = np.array([self.current_state.target_cp_x, self.current_state.target_cp_y, self.current_state.target_cp_z])
-            current_distance = np.linalg.norm(current_pos - target_pos)
-            
-            # Ilk adimda self.last_distance_to_target'i ayarla
-            if self.last_distance_to_target == float('inf'):
-                self.last_distance_to_target = current_distance
-
-            if checkpoint_changed:
-                distance_reward = 0
-            else:
-                distance_diff = self.last_distance_to_target - current_distance
-                distance_reward = distance_diff * 0.5
-            self.last_distance_to_target = current_distance
+            # 7. Aksiyon yumusakligi cezasi
+            action_smoothness_penalty = -0.02 * float(np.linalg.norm(action_array - self.last_action))
 
             # Tum odul ve cezalari topla
-            reward = reward_forward + time_penalty + consistency_penalty + checkpoint_bonus + distance_reward
+            reward = (
+                progress_reward
+                + backward_penalty
+                + forward_speed_bonus
+                + time_penalty
+                + consistency_penalty
+                + checkpoint_bonus
+                + contact_penalty
+                + action_smoothness_penalty
+            )
 
         # Takip icin odul degerlerini sakla
         self.last_reward = reward
@@ -248,13 +255,22 @@ class TMNFEnv(gym.Env):
                 terminated = True
 
             # Geri gitme tespiti
-            if self.current_state.forward_speed < -1.0:
+            if progress < -self.no_progress_epsilon:
                 self.backward_counter += 1
             else:
                 self.backward_counter = 0
             if self.backward_counter >= self.backward_threshold:
                 terminated = True
 
+            # Hedefe ilerleyememe tespiti
+            if checkpoint_changed or progress > self.no_progress_epsilon:
+                self.no_progress_counter = 0
+            else:
+                self.no_progress_counter += 1
+            if self.no_progress_counter >= self.no_progress_threshold:
+                terminated = True
+
+        self.last_action = action_array.copy()
         return observation, reward, terminated, truncated, info
 
     def reset(self, seed=None, options=None):
@@ -273,6 +289,8 @@ class TMNFEnv(gym.Env):
         self.step_count = 0
         self.low_speed_counter = 0
         self.backward_counter = 0
+        self.no_progress_counter = 0
+        self.last_action = np.zeros(self.action_space.shape, dtype=np.float32)
 
         # Oyunu yeniden baslat ve baslangicta tum tuslarin birakildigindan emin ol
         self.controller.send_command(["press delete", "rel up", "rel down"])

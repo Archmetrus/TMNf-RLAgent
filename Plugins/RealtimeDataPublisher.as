@@ -207,18 +207,18 @@ void OnRunStep(SimulationManager@ simManager)
                 if (block.get_WayPointType() == TM::WayPointType::Checkpoint) {
                     CheckpointInfo@ cpInfo = CheckpointInfo();
                     nat3 gridCoord = block.Coord;
-                    // YENI: Kosenin degil, blogun ORTA noktasinin koordinatini al
+                    // X/Z blok ortasi, Y ise yol/CP yuzey yuksekligi.
                     cpInfo.Position = vec3((gridCoord.x * 32.0) + 16.0, 
-                                           (gridCoord.y * 8.0) + 4.0, 
+                                           (gridCoord.y * 8.0) + 8.0, 
                                            (gridCoord.z * 32.0) + 16.0);
                     cpInfo.Order = ParseIntFromEnd(block.get_Name());
                     tempCheckpoints.Add(cpInfo);
                 }
                 else if (block.get_WayPointType() == TM::WayPointType::Finish) {
                     nat3 gridCoord = block.Coord;
-                    // YENI: Bitis cizgisi icin de ORTA noktayi al
+                    // X/Z blok ortasi, Y ise yol/finish yuzey yuksekligi.
                     g_finishWorldCoord = vec3((gridCoord.x * 32.0) + 16.0, 
-                                              (gridCoord.y * 8.0) + 4.0, 
+                                              (gridCoord.y * 8.0) + 8.0, 
                                               (gridCoord.z * 32.0) + 16.0);
                 }
             }
