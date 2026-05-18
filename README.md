@@ -325,6 +325,7 @@ Kullanim:
 4. `Modeli Izle` butonuna bas
 5. Model oyunu kontrol eder
 6. `Izlemeyi Durdur` ile kontrol birakilir
+7. `Modeli Kaldir` ile secili model UI'dan temizlenir; dosya silinmez
 
 Izleme modu egitim yapmaz. Model `deterministic=True` ile tahmin uretir.
 

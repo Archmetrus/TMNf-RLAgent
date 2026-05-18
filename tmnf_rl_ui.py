@@ -487,7 +487,9 @@ class App(tk.Tk):
         self.watch_button = ttk.Button(control_frame, text="Modeli Izle", command=self.start_watch, state="disabled", style="Success.TButton")
         self.watch_button.grid(row=4, column=1, padx=(6, 0), pady=4, sticky="ew")
         self.continue_training_button = ttk.Button(control_frame, text="Egitime Devam Et", command=self.start_continue_training, state="disabled", style="Success.TButton")
-        self.continue_training_button.grid(row=5, column=0, columnspan=2, pady=4, sticky="ew")
+        self.continue_training_button.grid(row=5, column=0, padx=(0, 6), pady=4, sticky="ew")
+        self.unload_model_button = ttk.Button(control_frame, text="Modeli Kaldir", command=self.unload_model, state="disabled")
+        self.unload_model_button.grid(row=5, column=1, padx=(6, 0), pady=4, sticky="ew")
         self.stop_watch_button = ttk.Button(control_frame, text="Izlemeyi Durdur", command=self.stop_watch, state="disabled", style="Danger.TButton")
         self.stop_watch_button.grid(row=6, column=0, columnspan=2, pady=4, sticky="ew")
         model_label = ttk.Label(control_frame, textvariable=self.data_vars["model_path"], style="Value.TLabel", wraplength=300)
@@ -717,6 +719,18 @@ class App(tk.Tk):
         self.update_watch_buttons()
         self.update_training_buttons()
 
+    def unload_model(self):
+        if self.training_running or self.watch_running:
+            return
+
+        self.loaded_model_path = None
+        self.loaded_model_observation_shape = None
+        self.model = None
+        self.data_vars["model_path"].set("Model yok")
+        self.set_training_status("Model kaldirildi.", "idle")
+        self.update_watch_buttons()
+        self.update_training_buttons()
+
     def adapt_observation_for_model(self, observation):
         if not self.model:
             return observation
@@ -810,11 +824,13 @@ class App(tk.Tk):
             self.load_model_button.config(state="disabled")
             self.watch_button.config(state="disabled")
             self.continue_training_button.config(state="disabled")
+            self.unload_model_button.config(state="disabled")
             self.stop_watch_button.config(state="normal" if not self.watch_should_stop else "disabled")
         else:
             self.load_model_button.config(state="normal" if not self.training_running else "disabled")
             self.watch_button.config(state="normal" if has_model and not self.training_running else "disabled")
             self.continue_training_button.config(state="normal" if has_model and not self.training_running else "disabled")
+            self.unload_model_button.config(state="normal" if has_model and not self.training_running else "disabled")
             self.stop_watch_button.config(state="disabled")
 
     def set_training_status(self, message, status_type):
