@@ -13,6 +13,7 @@ class CarState:
     Ayrica, bu veri uzerinden aracla ilgili ek hesaplamalar (orn. hareket yonu) yapar.
     """
     def __init__(self, data_string: str):
+        """Plugin'den gelen tek CSV satirini tipli alanlara ayirir."""
         self.valid = False
         self.direction = "--" # Hareket yonu icin varsayilan deger
         self.forward_speed = 0.0 # YENI: Ileri yon hizi icin
@@ -20,6 +21,7 @@ class CarState:
         try:
             parts = data_string.strip().split(',')
             
+            # Plugin ve Python arasindaki CSV sozlesmesi: 15 alan beklenir.
             # YENI: Beklenen parca sayisini 15'e cikar
             if len(parts) != 15:
                 # print(f"[UYARI] Gecersiz veri parcasi sayisi: {len(parts)}, beklenen 15.")
@@ -66,6 +68,7 @@ class CarState:
             # Ileri yondeki hizi bulmak icin iki vektorun nokta carpimini kullan.
             forward_speed = np.dot(velocity_vector, forward_vector)
             
+            # Pozitif deger arac burnu yonunde, negatif deger ters yone hareket demektir.
             # YENI: Hesaplanan degeri sakla
             self.forward_speed = forward_speed
 

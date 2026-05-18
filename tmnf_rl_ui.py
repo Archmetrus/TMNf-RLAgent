@@ -41,6 +41,7 @@ class StopTrainingCallback(BaseCallback):
     Egitimi disaridan durdurmak ve UI'yi guncellemek icin kullanilan ozel callback.
     """
     def __init__(self, app, verbose=0):
+        """Egitim dongusunun UI tarafindaki durdurma bayragini okuyabilmesi icin app referansini saklar."""
         super(StopTrainingCallback, self).__init__(verbose)
         self.app = app
 
@@ -53,6 +54,7 @@ class StopTrainingCallback(BaseCallback):
         self.app.current_step_count = self.num_timesteps
 
     def _on_step(self) -> bool:
+        """Her PPO adiminda egitimin devam edip etmeyecegini bildirir."""
         # App icindeki bayrak (flag) kontrol edilir.
         # Eger bayrak True ise, egitimi durdur (False dondur).
         return not self.app.training_should_stop
@@ -247,9 +249,11 @@ TRAFFIC_MONITOR_HTML = r"""<!doctype html>
 
 class TrafficMonitorHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
+        """HTTP server konsol loglarini susturur."""
         return
 
     def do_GET(self):
+        """Ana sayfa ve SSE event endpoint isteklerini ayirir."""
         parsed = urlparse(self.path)
         if parsed.path == "/events":
             self._serve_events()
@@ -257,6 +261,7 @@ class TrafficMonitorHandler(BaseHTTPRequestHandler):
             self._serve_page()
 
     def _serve_page(self):
+        """Trafik monitorunun HTML arayuzunu dondurur."""
         body = TRAFFIC_MONITOR_HTML.encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -265,6 +270,7 @@ class TrafficMonitorHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _serve_events(self):
+        """Kaydedilen trafik olaylarini tarayiciya SSE ile canli yollar."""
         app = self.server.app
         last_id = max(0, app.get_latest_traffic_id() - 200)
         try:
@@ -293,6 +299,7 @@ class TrafficMonitorHandler(BaseHTTPRequestHandler):
 
 class App(tk.Tk):
     def __init__(self):
+        """Tkinter arayuzunu, egitim durumunu ve soket/web monitor durumunu hazirlar."""
         super().__init__()
 
         self.title("TMNF RL Kontrol Paneli")
@@ -400,6 +407,7 @@ class App(tk.Tk):
         self.update_ui()
 
     def create_widgets(self):
+        """Ana pencere panellerini, butonlari ve canli veri etiketlerini olusturur."""
         main_frame = ttk.Frame(self, padding=18, style="TFrame")
         main_frame.pack(expand=True, fill="both")
         main_frame.columnconfigure(0, weight=1)
@@ -508,6 +516,7 @@ class App(tk.Tk):
 
     # --- Egitim Fonksiyonlari ---
     def has_live_data(self):
+        """Soketten son 1 saniye icinde gecerli arac verisi gelip gelmedigini kontrol eder."""
         if not self.listener_running:
             return False
         if not self.latest_car_state or not self.latest_car_state.valid:
@@ -517,6 +526,7 @@ class App(tk.Tk):
         return socket_connected and time.time() - self.latest_state_wall_time <= 1.0
 
     def ensure_live_data_or_warn(self):
+        """Egitim/izleme baslamadan once canli veri yoksa kullaniciyi uyarir."""
         if not self.listener_running:
             messagebox.showwarning("Veri yok", "Once Veri Izlemeyi Baslat'a basin.")
             return False
@@ -544,6 +554,7 @@ class App(tk.Tk):
             if not os.path.exists(logdir): os.makedirs(logdir)
                 
             if self.continue_training_from_loaded_model:
+                # Devam egitiminde policy agirliklari korunur, sadece env/log hedefi yenilenir.
                 self.set_training_status("Model yukleniyor...", "running")
                 self.model = PPO.load(self.training_source_model_path, env=self.env, tensorboard_log=logdir)
                 self.loaded_model_observation_shape = self.model.observation_space.shape
@@ -597,6 +608,7 @@ class App(tk.Tk):
             self.update_training_buttons()
             
     def start_training(self):
+        """Sifirdan PPO egitimini baslatir."""
         if not self.training_running:
             if self.watch_running:
                 messagebox.showwarning("Izleme aktif", "Once model izlemeyi durdurun.")
@@ -625,6 +637,7 @@ class App(tk.Tk):
             self.training_thread.start()
 
     def start_continue_training(self):
+        """Secili PPO modelini yukleyip egitime kaldigi agirliklardan devam eder."""
         if self.training_running:
             return
         if self.watch_running:
@@ -653,6 +666,7 @@ class App(tk.Tk):
         self.training_thread.start()
 
     def stop_training(self):
+        """Egitimi durdurma bayragini kaldirir ve manuel kayit adini alir."""
         if self.training_running and not self.training_should_stop:
             folder_name = simpledialog.askstring(
                 "Model klasoru",
@@ -664,6 +678,7 @@ class App(tk.Tk):
             self.stop_button.config(state="disabled")
 
     def sanitize_model_folder_name(self, folder_name):
+        """Kullanici girdisini Windows dosya/klasor adi icin guvenli hale getirir."""
         if not folder_name:
             return None
 
@@ -678,22 +693,26 @@ class App(tk.Tk):
         return cleaned or None
 
     def get_manual_save_dir(self, default_models_dir):
+        """Manuel kaydin hangi models/ klasorune yazilacagini belirler."""
         if self.manual_save_folder_name:
             return os.path.join("models", self.manual_save_folder_name)
         return default_models_dir
 
     def get_manual_save_path(self, models_dir):
+        """Manuel model dosya adini uretir ve mevcut dosyayi ezmemek icin gerekirse timestamp ekler."""
         if not self.manual_save_folder_name:
             return os.path.join(models_dir, f"manual_save_{int(time.time())}")
 
         base_path = os.path.join(models_dir, self.manual_save_folder_name)
         zip_path = f"{base_path}.zip"
+        # SB3 .save uzantiyi kendi ekledigi icin varlik kontrolu .zip uzerinden yapilir.
         if not os.path.exists(zip_path):
             return base_path
 
         return os.path.join(models_dir, f"{self.manual_save_folder_name}_{int(time.time())}")
 
     def update_training_buttons(self):
+        """Egitim durumuna gore egitim/model butonlarini aktif veya pasif yapar."""
         if self.training_running:
             self.start_button.config(state="disabled")
             self.stop_button.config(state="normal" if not self.training_should_stop else "disabled")
@@ -704,6 +723,7 @@ class App(tk.Tk):
         self.update_watch_buttons()
 
     def load_model(self):
+        """Diskten bir PPO .zip modeli secip UI durumuna yukler."""
         model_path = filedialog.askopenfilename(
             title="PPO model sec",
             initialdir=os.path.abspath("models"),
@@ -720,9 +740,11 @@ class App(tk.Tk):
         self.update_training_buttons()
 
     def unload_model(self):
+        """Secili modeli UI'dan kaldirir; dosyayi diskten silmez."""
         if self.training_running or self.watch_running:
             return
 
+        # Sadece UI secimini temizler; diskteki .zip model dosyasina dokunmaz.
         self.loaded_model_path = None
         self.loaded_model_observation_shape = None
         self.model = None
@@ -732,9 +754,11 @@ class App(tk.Tk):
         self.update_training_buttons()
 
     def adapt_observation_for_model(self, observation):
+        """Izleme modunda eski/yeni observation boyut farkini basitce uyarlar."""
         if not self.model:
             return observation
 
+        # Eski modelleri izleyebilmek icin observation boyutu izleme aninda uyarlanir.
         expected_shape = self.model.observation_space.shape
         if observation.shape == expected_shape:
             return observation
@@ -753,6 +777,7 @@ class App(tk.Tk):
         return observation
 
     def watch_worker(self):
+        """Yuklu modeli egitim yapmadan oyunda deterministik olarak calistirir."""
         try:
             self.set_training_status("Model yukleniyor...", "running")
             self.env = TMNFEnv(ui_app=self)
@@ -786,6 +811,7 @@ class App(tk.Tk):
             self.update_training_buttons()
 
     def start_watch(self):
+        """Model izleme modunu baslatmadan once gerekli durum kontrollerini yapar."""
         if self.watch_running:
             return
         if self.training_running:
@@ -811,12 +837,14 @@ class App(tk.Tk):
         self.watch_thread.start()
 
     def stop_watch(self):
+        """Model izleme dongusunu durdurma bayragini kaldirir."""
         if self.watch_running and not self.watch_should_stop:
             self.watch_should_stop = True
             self.set_training_status("Izleme durduruluyor...", "stopped")
             self.stop_watch_button.config(state="disabled")
 
     def update_watch_buttons(self):
+        """Model secimi ve izleme durumuna gore model butonlarini gunceller."""
         if not hasattr(self, "watch_button"):
             return
         has_model = self.loaded_model_path is not None
@@ -834,6 +862,7 @@ class App(tk.Tk):
             self.stop_watch_button.config(state="disabled")
 
     def set_training_status(self, message, status_type):
+        """Durum yazisini ve rengini egitim/izleme durumuna gore ayarlar."""
         self.data_vars["training_status"].set(message)
         if status_type == "running":
             self.training_status_label.config(style="Status.Running.TLabel")
@@ -847,6 +876,7 @@ class App(tk.Tk):
 
     # --- Web Trafik Monitoru ---
     def start_web_monitor(self):
+        """Yerel web trafik monitoru icin HTTP/SSE server baslatir."""
         if self.web_monitor_server is not None:
             return
         try:
@@ -863,9 +893,11 @@ class App(tk.Tk):
             print(f"[WEB] Trafik monitoru acilamadi: {e}")
 
     def open_web_monitor(self):
+        """Web trafik monitorunu varsayilan tarayicida acar."""
         webbrowser.open(f"http://{self.web_monitor_host}:{self.web_monitor_port}")
 
     def stop_web_monitor(self):
+        """Uygulama kapanirken web monitor serverini durdurur."""
         self.web_monitor_stop.set()
         if self.web_monitor_server is not None:
             self.web_monitor_server.shutdown()
@@ -873,6 +905,7 @@ class App(tk.Tk):
             self.web_monitor_server = None
 
     def record_traffic(self, direction, payload):
+        """Gelen/giden/sistem trafik satirini web monitor icin bellekte saklar."""
         now = time.strftime("%H:%M:%S")
         with self.traffic_lock:
             event = {
@@ -887,15 +920,18 @@ class App(tk.Tk):
                 self.traffic_events = self.traffic_events[-2000:]
 
     def get_latest_traffic_id(self):
+        """SSE istemcisinin kaldigi yeri bulmasi icin son trafik id'sini verir."""
         with self.traffic_lock:
             return self.traffic_next_id - 1
 
     def get_traffic_events_after(self, event_id):
+        """Verilen id'den sonraki trafik olaylarini kopya olarak dondurur."""
         with self.traffic_lock:
             return [event.copy() for event in self.traffic_events if event["id"] > event_id]
 
     # --- Soket Dinleyici Fonksiyonlari ---
     def socket_worker(self):
+        """Plugin TCP serverina baglanir, gelen CSV satirlarini parse edip UI kuyruguna atar."""
         recv_buffer = ""
         while self.listener_running:
             if self.client_socket is None:
@@ -941,6 +977,7 @@ class App(tk.Tk):
         self._drop_socket_client()
 
     def _drop_socket_client(self):
+        """Aktif TCP client baglantisini kapatir ve UI tarafinda kopus kaydi olusturur."""
         with self.socket_lock:
             client = self.client_socket
             self.client_socket = None
@@ -952,6 +989,7 @@ class App(tk.Tk):
             self.record_traffic("system", "8765 baglantisi kapandi")
 
     def send_socket_command(self, commands):
+        """Python tarafindan uretilen TMInterface komutlarini plugine TCP ile yollar."""
         payload = "\n".join(commands) + "\n"
         with self.socket_lock:
             client = self.client_socket
@@ -972,6 +1010,7 @@ class App(tk.Tk):
                 return False
 
     def start_listening(self):
+        """Veri dinleme thread'ini baslatir ve plugin portuna baglanmayi dener."""
         if not self.listener_running:
             self.listener_running = True
             self.listener_thread = threading.Thread(target=self.socket_worker, daemon=True)
@@ -983,6 +1022,7 @@ class App(tk.Tk):
             self.frame_count = 0
 
     def stop_listening(self):
+        """Veri dinlemeyi durdurur ve mevcut soket baglantisini kapatir."""
         if self.listener_running:
             self.listener_running = False
             self._drop_socket_client()
@@ -991,6 +1031,7 @@ class App(tk.Tk):
             self.stop_listener_button.config(state="disabled")
             
     def set_listener_status(self, message, status_type):
+        """Baglanti durum metnini ve rengini gunceller."""
         self.data_vars["listener_status"].set(message)
         if status_type == "running":
             self.listener_status_label.config(style="Status.Running.TLabel")
@@ -998,6 +1039,7 @@ class App(tk.Tk):
             self.listener_status_label.config(style="Status.Stopped.TLabel")
 
     def queue_listener_status(self, message, status_type):
+        """Worker thread'den UI thread'ine baglanti durum mesaji tasir."""
         self.status_queue.put((message, status_type))
 
     def update_ui(self):
@@ -1050,6 +1092,7 @@ class App(tk.Tk):
         self.after(self.data_poll_interval_ms, self.update_ui)
 
     def on_closing(self):
+        """Pencere kapanirken thread'leri, soketi ve web monitoru temizler."""
         # Tum thread'leri durdur
         self.stop_listening()
         self.stop_web_monitor()

@@ -58,12 +58,14 @@ string g_socketReadBuffer = "";
 const string SOCKET_HOST = "127.0.0.1";
 const uint16 SOCKET_PORT = 8765;
 
+// TCP client koptugunda referansi ve yarim kalan komut bufferini temizler.
 void DropSocket()
 {
     @g_clientSocket = null;
     g_socketReadBuffer = "";
 }
 
+// Plugin tarafinda Python'in baglanacagi TCP serveri tek kez acar.
 void EnsureSocketServer()
 {
     if (g_serverSocket !is null) return;
@@ -77,6 +79,7 @@ void EnsureSocketServer()
     }
 }
 
+// Python'dan gelen tek komut satirini TMInterface konsol komutu olarak calistirir.
 void ExecuteSocketCommandLine(string command)
 {
     if (command.get_Length() > 0 && command[command.get_Length() - 1] == 13) {
@@ -86,6 +89,7 @@ void ExecuteSocketCommandLine(string command)
     ExecuteCommand(command, ExecuteCommandFlags::SuppressOutput);
 }
 
+// TCP bufferinda biriken komutlari newline'a gore ayirip sirasiyla uygular.
 void ProcessSocketCommands()
 {
     if (g_clientSocket is null) return;
@@ -109,6 +113,7 @@ void ProcessSocketCommands()
     }
 }
 
+// Tek state CSV satirini Python client'a yollar; hata olursa soketi dusurur.
 bool SendSocketState(const string&in data)
 {
     if (g_clientSocket is null) return false;
@@ -119,6 +124,7 @@ bool SendSocketState(const string&in data)
     return true;
 }
 
+// Plugin acildiginda degiskenleri kaydeder ve TCP serveri hazirlar.
 void Main()
 {
     print("===========================================");
@@ -149,6 +155,7 @@ void Main()
     print("===========================================");
 }
 
+// Render dongusu servera baglanmaya calisan Python client'i kabul eder.
 void Render()
 {
     EnsureSocketServer();
@@ -207,6 +214,7 @@ void OnRunStep(SimulationManager@ simManager)
                 if (block.get_WayPointType() == TM::WayPointType::Checkpoint) {
                     CheckpointInfo@ cpInfo = CheckpointInfo();
                     nat3 gridCoord = block.Coord;
+                    // TMNF blok olcegi: X/Z 32 birim, Y 8 birim.
                     // X/Z blok ortasi, Y ise yol/CP yuzey yuksekligi.
                     cpInfo.Position = vec3((gridCoord.x * 32.0) + 16.0, 
                                            (gridCoord.y * 8.0) + 8.0, 
@@ -307,7 +315,9 @@ void OnRunStep(SimulationManager@ simManager)
     SetVariable("rt_roll", roll);  // Debug icin hala yazdiriliyor ama CSV'de yok
     SetVariable("rt_checkpoint", currentCP);
     SetVariable("rt_lap", currentLap);
+
     // Veriyi TCP soketten 50ms'de bir Python'a gonder.
+    // Ajan step suresi de 50ms oldugu icin iki taraf ayni ritimde kalir.
     if (raceTime % 50 == 0)
     {
         string data = ""
@@ -365,7 +375,7 @@ void OnRunStep(SimulationManager@ simManager)
 // void CheckForCommands() {}
 // void OnSimulationStep(SimulationManager@ simManager, bool userCancelled) {}
 
-
+// TMInterface plugin listesindeki ad, surum ve aciklama bilgisini dondurur.
 PluginInfo@ GetPluginInfo()
 {
     auto info = PluginInfo();

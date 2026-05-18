@@ -13,6 +13,7 @@ class TMNFEnv(gym.Env):
     metadata = {'render_modes': ['human']}
 
     def __init__(self, ui_app):
+        """UI'dan gelen canli state ve komut gonderici ile Gymnasium ortamını kurar."""
         super(TMNFEnv, self).__init__()
         
         # Arayuz referansini sakla
@@ -180,12 +181,14 @@ class TMNFEnv(gym.Env):
             target_pos = np.array([self.current_state.target_cp_x, self.current_state.target_cp_y, self.current_state.target_cp_z])
             current_distance = np.linalg.norm(current_pos - target_pos)
             
+            # CP degisince hedef de degisir; eski CP mesafesi yeni hedefe ceza uretmemeli.
             if self.last_distance_to_target == float('inf') or checkpoint_changed:
                 progress = 0.0
             else:
                 progress = self.last_distance_to_target - current_distance
             self.last_distance_to_target = current_distance
 
+            # Tek adimlik buyuk ziplamalar reward'u patlatmasin diye sinirla.
             progress_clipped = float(np.clip(progress, -3.0, 3.0))
             progress_reward = progress_clipped
             backward_penalty = progress_clipped * 2.0 if progress_clipped < 0.0 else 0.0
@@ -254,7 +257,7 @@ class TMNFEnv(gym.Env):
             if self.low_speed_counter >= self.low_speed_threshold:
                 terminated = True
 
-            # Geri gitme tespiti
+            # Geri gitme burada aracin vitese gore degil, hedef mesafesinin artmasina gore takip edilir.
             if progress < -self.no_progress_epsilon:
                 self.backward_counter += 1
             else:
