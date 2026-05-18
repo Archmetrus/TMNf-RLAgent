@@ -377,6 +377,8 @@ class App(tk.Tk):
         self.loaded_model_observation_shape = None
         self.env = None
         self.manual_save_folder_name = None
+        self.continue_training_from_loaded_model = False
+        self.training_source_model_path = None
         self.latest_car_state = None # En son gecerli araba durumunu saklamak icin
         self.latest_state_wall_time = 0.0
         self.data_poll_interval_ms = 50
@@ -484,14 +486,16 @@ class App(tk.Tk):
         self.load_model_button.grid(row=4, column=0, padx=(0, 6), pady=4, sticky="ew")
         self.watch_button = ttk.Button(control_frame, text="Modeli Izle", command=self.start_watch, state="disabled", style="Success.TButton")
         self.watch_button.grid(row=4, column=1, padx=(6, 0), pady=4, sticky="ew")
+        self.continue_training_button = ttk.Button(control_frame, text="Egitime Devam Et", command=self.start_continue_training, state="disabled", style="Success.TButton")
+        self.continue_training_button.grid(row=5, column=0, columnspan=2, pady=4, sticky="ew")
         self.stop_watch_button = ttk.Button(control_frame, text="Izlemeyi Durdur", command=self.stop_watch, state="disabled", style="Danger.TButton")
-        self.stop_watch_button.grid(row=5, column=0, columnspan=2, pady=4, sticky="ew")
+        self.stop_watch_button.grid(row=6, column=0, columnspan=2, pady=4, sticky="ew")
         model_label = ttk.Label(control_frame, textvariable=self.data_vars["model_path"], style="Value.TLabel", wraplength=300)
-        model_label.grid(row=6, column=0, columnspan=2, sticky="ew", pady=(8, 0))
+        model_label.grid(row=7, column=0, columnspan=2, sticky="ew", pady=(8, 0))
 
-        ttk.Separator(control_frame, orient="horizontal").grid(row=7, column=0, columnspan=2, sticky="ew", pady=14)
+        ttk.Separator(control_frame, orient="horizontal").grid(row=8, column=0, columnspan=2, sticky="ew", pady=14)
         reward_frame = ttk.Frame(control_frame, style="Panel.TFrame")
-        reward_frame.grid(row=8, column=0, columnspan=2, sticky="ew")
+        reward_frame.grid(row=9, column=0, columnspan=2, sticky="ew")
         reward_frame.columnconfigure(0, weight=1)
         reward_frame.columnconfigure(1, weight=1)
         ttk.Label(reward_frame, text="Anlik Odul", style="Muted.TLabel").grid(row=0, column=0, sticky="w")
@@ -537,21 +541,26 @@ class App(tk.Tk):
             logdir = "logs"
             if not os.path.exists(logdir): os.makedirs(logdir)
                 
-            # YENI: Ince ayar yapilmis hiperparametreler
-            # learning_rate: Ajanin ogrenme adimlarinin buyuklugu. Daha dusuk, daha stabil.
-            # gamma: Gelecekteki odullere verilen onem. Daha yuksek, daha uzun vadeli planlama.
-            self.model = PPO(
-                "MlpPolicy", 
-                self.env, 
-                verbose=1, 
-                tensorboard_log=logdir,
-                learning_rate=0.0003,
-                gamma=0.99,
-                n_steps=256,
-                batch_size=64,
-                n_epochs=10,
-                ent_coef=0.01
-            )
+            if self.continue_training_from_loaded_model:
+                self.set_training_status("Model yukleniyor...", "running")
+                self.model = PPO.load(self.training_source_model_path, env=self.env, tensorboard_log=logdir)
+                self.loaded_model_observation_shape = self.model.observation_space.shape
+            else:
+                # YENI: Ince ayar yapilmis hiperparametreler
+                # learning_rate: Ajanin ogrenme adimlarinin buyuklugu. Daha dusuk, daha stabil.
+                # gamma: Gelecekteki odullere verilen onem. Daha yuksek, daha uzun vadeli planlama.
+                self.model = PPO(
+                    "MlpPolicy", 
+                    self.env, 
+                    verbose=1, 
+                    tensorboard_log=logdir,
+                    learning_rate=0.0003,
+                    gamma=0.99,
+                    n_steps=256,
+                    batch_size=64,
+                    n_epochs=10,
+                    ent_coef=0.01
+                )
             
             self.set_training_status("Egitim basladi...", "running")
             
@@ -559,7 +568,7 @@ class App(tk.Tk):
             self.model.learn(
                 total_timesteps=100000, 
                 reset_num_timesteps=False, 
-                tb_log_name=f"PPO-{int(time.time())}",
+                tb_log_name=f"PPO-continue-{int(time.time())}" if self.continue_training_from_loaded_model else f"PPO-{int(time.time())}",
                 callback=StopTrainingCallback(self)
             )
             
@@ -568,7 +577,7 @@ class App(tk.Tk):
                 self.set_training_status("Egitim kullanici tarafindan durduruldu.", "stopped")
                 models_dir = self.get_manual_save_dir(default_models_dir)
                 if not os.path.exists(models_dir): os.makedirs(models_dir)
-                self.model.save(f"{models_dir}/manual_save_{int(time.time())}")
+                self.model.save(self.get_manual_save_path(models_dir))
             else:
                 self.set_training_status("Egitim tamamlandi.", "idle")
                 models_dir = default_models_dir
@@ -581,6 +590,8 @@ class App(tk.Tk):
             if self.env:
                 self.env.close()
             self.training_running = False
+            self.continue_training_from_loaded_model = False
+            self.training_source_model_path = None
             self.update_training_buttons()
             
     def start_training(self):
@@ -605,9 +616,39 @@ class App(tk.Tk):
             self.training_running = True
             self.training_should_stop = False
             self.manual_save_folder_name = None
+            self.continue_training_from_loaded_model = False
+            self.training_source_model_path = None
             self.update_training_buttons()
             self.training_thread = threading.Thread(target=self.training_worker, daemon=True)
             self.training_thread.start()
+
+    def start_continue_training(self):
+        if self.training_running:
+            return
+        if self.watch_running:
+            messagebox.showwarning("Izleme aktif", "Once model izlemeyi durdurun.")
+            return
+        if not self.loaded_model_path:
+            messagebox.showwarning("Model yok", "Once bir model yukleyin.")
+            return
+        if not self.ensure_live_data_or_warn():
+            return
+        if not messagebox.askyesno("Egitime Devam Et", "Yuklu model egitime devam edecek.\n\nObservation/action yapisi ayni olmali.\n\nDevam edilsin mi?"):
+            return
+
+        self.data_vars["reward_current"].set("0.00")
+        self.data_vars["reward_total"].set("0.00")
+        self.data_vars["step_count"].set("Adim: 0")
+        self.current_step_count = 0
+
+        self.training_running = True
+        self.training_should_stop = False
+        self.manual_save_folder_name = None
+        self.continue_training_from_loaded_model = True
+        self.training_source_model_path = self.loaded_model_path
+        self.update_training_buttons()
+        self.training_thread = threading.Thread(target=self.training_worker, daemon=True)
+        self.training_thread.start()
 
     def stop_training(self):
         if self.training_running and not self.training_should_stop:
@@ -639,6 +680,17 @@ class App(tk.Tk):
             return os.path.join("models", self.manual_save_folder_name)
         return default_models_dir
 
+    def get_manual_save_path(self, models_dir):
+        if not self.manual_save_folder_name:
+            return os.path.join(models_dir, f"manual_save_{int(time.time())}")
+
+        base_path = os.path.join(models_dir, self.manual_save_folder_name)
+        zip_path = f"{base_path}.zip"
+        if not os.path.exists(zip_path):
+            return base_path
+
+        return os.path.join(models_dir, f"{self.manual_save_folder_name}_{int(time.time())}")
+
     def update_training_buttons(self):
         if self.training_running:
             self.start_button.config(state="disabled")
@@ -663,6 +715,7 @@ class App(tk.Tk):
         self.data_vars["model_path"].set(os.path.basename(model_path))
         self.set_training_status("Model yuklendi.", "idle")
         self.update_watch_buttons()
+        self.update_training_buttons()
 
     def adapt_observation_for_model(self, observation):
         if not self.model:
@@ -756,10 +809,12 @@ class App(tk.Tk):
         if self.watch_running:
             self.load_model_button.config(state="disabled")
             self.watch_button.config(state="disabled")
+            self.continue_training_button.config(state="disabled")
             self.stop_watch_button.config(state="normal" if not self.watch_should_stop else "disabled")
         else:
             self.load_model_button.config(state="normal" if not self.training_running else "disabled")
             self.watch_button.config(state="normal" if has_model and not self.training_running else "disabled")
+            self.continue_training_button.config(state="normal" if has_model and not self.training_running else "disabled")
             self.stop_watch_button.config(state="disabled")
 
     def set_training_status(self, message, status_type):

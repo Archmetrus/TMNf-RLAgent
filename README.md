@@ -284,7 +284,8 @@ models/PPO-<timestamp>/final_model.zip
 
 Egitim `Egitimi Durdur` butonu ile durdurulursa UI model klasoru icin isim sorar.
 
-- Isim yazilirsa: `models/<girilen_isim>/manual_save_<timestamp>.zip`
+- Isim yazilirsa: `models/<girilen_isim>/<girilen_isim>.zip`
+- Ayni dosya zaten varsa: `models/<girilen_isim>/<girilen_isim>_<timestamp>.zip`
 - Bos birakilip Tamam'a basilirsa: `models/PPO-<timestamp>/manual_save_<timestamp>.zip`
 - Iptal edilirse: default klasor kullanilir
 
@@ -328,6 +329,25 @@ Kullanim:
 Izleme modu egitim yapmaz. Model `deterministic=True` ile tahmin uretir.
 
 Eski modeller 4 boyutlu observation ile egitildiyse UI observation'i modelin bekledigi boyuta otomatik uyarlar. Bu uyumluluk sadece izleme icindir; yeni egitimler guncel 5 boyutlu gozlemle yapilir.
+
+## Egitime Devam Etme
+
+Daha once egitilmis bir PPO modeli ayni observation/action yapisi korunuyorsa tekrar yuklenip egitime devam ettirilebilir.
+
+Arayuzden:
+
+1. `Veri Izlemeyi Baslat`
+2. `Model Yukle` ile `.zip` model sec
+3. `Egitime Devam Et` butonuna bas
+4. Egitimi normal sekilde durdur veya tamamlanmasini bekle
+
+Devam egitimi eski model dosyasini ezmez. Yeni kayit yine `models/` altina yazilir.
+
+Notlar:
+
+- Eski 4 observation'li model yeni 5 observation ortaminda egitime devam edemez.
+- Reward fonksiyonu degistiyse model devam edebilir ama davranis gecici olarak sarsilabilir.
+- Devam egitimi TensorBoard'da `PPO-continue-<timestamp>` adi ile gorunur.
 
 ## Arayuz
 
