@@ -4,6 +4,13 @@ Bu proje, TrackMania Nations Forever (TMNF) oyununda bir araci pekistirmeli ogre
 
 Proje su an clipboard uzerinden veri okumaz. Eski pano/clipboard-history yaklasimi kullanilmamaktadir. Oyun ile Python arasindaki veri ve komut akisi TCP soket uzerinden yapilir.
 
+## Çalıştırma sınırları
+
+- **TrackMania Nations Forever ve TMInterface kurulu bir oyun ortamı gerekir.** Python bağımlılıklarını kurmak tek başına yeterli değildir.
+- Kurulum yönergeleri Windows içindir; diğer işletim sistemleri için destek doğrulanmamıştır.
+- TMInterface içindeki `RealtimeDataPublisher.as` eklentisi etkin olmalı ve oyun ile Python arasında TCP bağlantısı kurulmalıdır. Oyun/eklenti olmadan canlı telemetri, sürüş ve eğitim çalışmaz.
+- Kullanıcı dizininin taşınabilir hale getirilmesi, oyun üzerinde uçtan uca sürüş veya eğitim doğrulaması anlamına gelmez. Kurulum için [Kullanım talimatlarını](KULLANIM_TALİMATLARI.md) izleyin.
+
 ## Proje Ozeti
 
 Sistem, TMInterface icinde calisan `RealtimeDataPublisher.as` eklentisi ile oyun motorundan arac durumunu toplar. Bu durum bilgisi Python arayuzune TCP uzerinden aktarilir. Python tarafinda Gymnasium uyumlu `TMNFEnv` ortami, bu veriyi PPO ajaninin kullanabilecegi gozlem formatina cevirir. Ajan direksiyon, gaz ve fren kararlarini uretir; bu kararlar ayni TCP baglantisi uzerinden eklentiye geri gonderilir ve TMInterface komutlari olarak oyuna uygulanir.
