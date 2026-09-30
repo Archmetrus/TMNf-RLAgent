@@ -30,10 +30,10 @@ Bu belge, TMInterface ve Python tabanlı RL ajanını çalıştırmak için adı
 ### Adım 2: Python Arayüzünü Başlatma
 *Ajanı eğitmek ve verileri izlemek için gereklidir.*
 
-1.  Bir terminal (PowerShell veya CMD) açın.
+1.  Bir terminal (PowerShell) açın.
 2.  Proje klasörüne gidin:
     ```powershell
-    cd "C:\Users\YKK\Documents\TMInterface"
+    Set-Location (Join-Path $env:USERPROFILE 'Documents\TMInterface')
     ```
 3.  Ana uygulamayı çalıştırın:
     ```powershell
